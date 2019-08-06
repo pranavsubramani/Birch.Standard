@@ -1,7 +1,3 @@
-cpp{{
-#include "boost/filesystem.hpp"
-}}
-
 READ:Integer <- 1;
 WRITE:Integer <- 2;
 APPEND:Integer <- 3;
@@ -13,11 +9,11 @@ APPEND:Integer <- 3;
  */
 function mkdir(path:String) {
   cpp{{
-  boost::filesystem::path p = path;
-  if (!boost::filesystem::is_directory(p)) {
+  std::filesystem::path p = path;
+  if (!std::filesystem::is_directory(p)) {
     p = p.parent_path();
   }
-  boost::filesystem::create_directories(p);
+  std::filesystem::create_directories(p);
   }}
 }
 
@@ -55,9 +51,9 @@ function fopen(path:String, mode:Integer) -> File {
   } else if (mode == WRITE) {
     s <- "w";
     cpp{{
-    boost::filesystem::path p = path;
+    std::filesystem::path p = path;
     if (!p.parent_path().empty()) {
-      boost::filesystem::create_directories(p.parent_path());
+      std::filesystem::create_directories(p.parent_path());
     }
     }}
   } else if (mode == APPEND) {
@@ -94,7 +90,7 @@ function fclose(file:File) {
 function extension(path:String) -> String {
   ext:String;
   cpp{{
-  boost::filesystem::path f(path);
+  std::filesystem::path f(path);
   ext = f.extension().string();
   }}
   return ext;

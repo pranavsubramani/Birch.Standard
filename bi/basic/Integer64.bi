@@ -156,11 +156,11 @@ operator (x:Integer64 != y:Integer64) -> Boolean;
 /**
  * Absolute value.
  */
-function abs(x:Integer64) -> Integer64 {
-  cpp {{
-  return std::abs(x);
-  }}
-}
+//function abs(x:Integer64) -> Integer64 {
+//  cpp {{
+//  return std::abs((bi::type::Integer64)x);
+//  }}
+//}
 
 /**
  * Power.

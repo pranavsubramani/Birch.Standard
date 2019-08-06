@@ -158,7 +158,7 @@ operator (x:Integer16 != y:Integer16) -> Boolean;
  */
 function abs(x:Integer16) -> Integer16 {
   cpp {{
-  return std::abs(x);
+  return std::abs((bi::type::Integer16)x);
   }}
 }
 

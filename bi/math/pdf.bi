@@ -44,7 +44,7 @@ function pdf_binomial(x:Integer, n:Integer, ρ:Real) -> Real {
   assert 0 <= n;
   assert 0.0 <= ρ && ρ <= 1.0;
   cpp{{
-  return boost::math::pdf(boost::math::binomial_distribution<>(n, ρ), x);
+  //return boost::math::pdf(boost::math::binomial_distribution<>(n, ρ), x);
   }}
 }
 
@@ -61,7 +61,7 @@ function pdf_negative_binomial(x:Integer, k:Integer, ρ:Real) -> Real {
   assert 0 < k;
   assert 0.0 <= ρ && ρ <= 1.0;
   cpp{{
-  return boost::math::pdf(boost::math::negative_binomial_distribution<>(k, ρ), x);
+  //return boost::math::pdf(boost::math::negative_binomial_distribution<>(k, ρ), x);
   }}
 }
 
@@ -76,7 +76,7 @@ function pdf_negative_binomial(x:Integer, k:Integer, ρ:Real) -> Real {
 function pdf_poisson(x:Integer, λ:Real) -> Real {
   assert 0.0 <= λ;
   cpp{{
-  return boost::math::pdf(boost::math::poisson_distribution<>(λ), x);
+  //return boost::math::pdf(boost::math::poisson_distribution<>(λ), x);
   }}
 }
 
@@ -183,7 +183,7 @@ function pdf_uniform(x:Real, l:Real, u:Real) -> Real {
 function pdf_exponential(x:Real, λ:Real) -> Real {
   assert 0.0 < λ;
   cpp{{
-  return boost::math::pdf(boost::math::exponential_distribution<>(λ), x);
+  //return boost::math::pdf(boost::math::exponential_distribution<>(λ), x);
   }}
 }
 
@@ -200,7 +200,7 @@ function pdf_weibull(x:Real, k:Real, λ:Real) -> Real {
   assert 0.0 < k;
   assert 0.0 < λ;
   cpp{{
-  return boost::math::pdf(boost::math::weibull_distribution<>(k, λ), x);
+  //return boost::math::pdf(boost::math::weibull_distribution<>(k, λ), x);
   }}
 }
 
@@ -216,7 +216,7 @@ function pdf_weibull(x:Real, k:Real, λ:Real) -> Real {
 function pdf_gaussian(x:Real, μ:Real, σ2:Real) -> Real {
   assert 0.0 < σ2;
   cpp{{
-  return boost::math::pdf(boost::math::normal_distribution<>(μ, ::sqrt(σ2)), x);
+  //return boost::math::pdf(boost::math::normal_distribution<>(μ, ::sqrt(σ2)), x);
   }}
 }
 
@@ -232,7 +232,7 @@ function pdf_gaussian(x:Real, μ:Real, σ2:Real) -> Real {
 function pdf_log_gaussian(x:Real, μ:Real, σ2:Real) -> Real {
   assert 0.0 < σ2;
   cpp{{
-  return boost::math::pdf(boost::math::lognormal_distribution<>(μ, ::sqrt(σ2)), x);
+  //return boost::math::pdf(boost::math::lognormal_distribution<>(μ, ::sqrt(σ2)), x);
   }}
 }
 
@@ -247,7 +247,7 @@ function pdf_log_gaussian(x:Real, μ:Real, σ2:Real) -> Real {
 function pdf_student_t(x:Real, ν:Real) -> Real {
   assert 0.0 < ν;
   cpp{{
-  return boost::math::pdf(boost::math::students_t_distribution<>(ν), x);
+  //return boost::math::pdf(boost::math::students_t_distribution<>(ν), x);
   }}
 }
 
@@ -281,7 +281,7 @@ function pdf_beta(x:Real, α:Real, β:Real) -> Real {
   assert 0.0 < α;
   assert 0.0 < β;
   cpp{{
-  return boost::math::pdf(boost::math::beta_distribution<>(α, β), x);
+  //return boost::math::pdf(boost::math::beta_distribution<>(α, β), x);
   }}
 }
 
@@ -298,7 +298,7 @@ function pdf_gamma(x:Real, k:Real, θ:Real) -> Real {
   assert 0.0 < k;
   assert 0.0 < θ;
   cpp{{
-  return boost::math::pdf(boost::math::gamma_distribution<>(k, θ), x);
+  //return boost::math::pdf(boost::math::gamma_distribution<>(k, θ), x);
   }}
 }
 
@@ -315,7 +315,7 @@ function pdf_inverse_gamma(x:Real, α:Real, β:Real) -> Real {
   assert 0.0 < α;
   assert 0.0 < β;
   cpp{{
-  return boost::math::pdf(boost::math::inverse_gamma_distribution<>(α, β), x);
+  //return boost::math::pdf(boost::math::inverse_gamma_distribution<>(α, β), x);
   }}
 }
 
@@ -411,7 +411,7 @@ function pdf_lomax(x:Real, λ:Real, α:Real) -> Real {
   assert 0.0 < α;
 
   cpp{{
-  return boost::math::pdf(boost::math::pareto_distribution<>(λ, α), x + λ);
+  //return boost::math::pdf(boost::math::pareto_distribution<>(λ, α), x + λ);
   }}
 }
 

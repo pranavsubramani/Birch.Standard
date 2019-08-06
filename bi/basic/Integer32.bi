@@ -158,7 +158,7 @@ operator (x:Integer32 != y:Integer32) -> Boolean;
  */
 function abs(x:Integer32) -> Integer32 {
   cpp {{
-  return std::abs(x);
+  return std::abs((bi::type::Integer32)x);
   }}
 }
 
