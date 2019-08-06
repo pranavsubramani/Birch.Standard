@@ -15,10 +15,10 @@ namespace libbirch {
  * A Range describes the active elements along one dimension of an array. It
  * combines an Offset and Length. Each of these may have either a
  * static value (indicated by a template parameter giving that value) or a
- * dynamic value (indicated by a template parameter of mutable_value and
+ * dynamic value (indicated by a template parameter of 0 and
  * initial value given in the constructor).
  */
-template<int64_t offset_value = 0, int64_t length_value = mutable_value>
+template<int64_t offset_value = 0, int64_t length_value = 0>
 struct Range: public Offset<offset_value>, public Length<length_value> {
   typedef Offset<offset_value> offset_type;
   typedef Length<length_value> length_type;

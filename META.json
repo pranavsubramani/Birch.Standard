@@ -327,7 +327,6 @@
       "libbirch/libbirch.hpp",
       "libbirch/Length.hpp",
       "libbirch/memory.hpp",
-      "libbirch/mutable.hpp",
       "libbirch/Nil.hpp",
       "libbirch/Offset.hpp",
       "libbirch/Optional.hpp",

@@ -3,8 +3,6 @@
  */
 #pragma once
 
-#include "libbirch/mutable.hpp"
-
 namespace libbirch {
 /**
  * Offset. Number of elements until the first active element along a
@@ -22,8 +20,8 @@ struct Offset {
   }
 };
 template<>
-struct Offset<mutable_value> {
-  static const int64_t offset_value = mutable_value;
+struct Offset<0> {
+  static const int64_t offset_value = 0;
   int64_t offset;
 
   Offset(const int64_t offset) :

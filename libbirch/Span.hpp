@@ -19,10 +19,10 @@ namespace libbirch {
  * and Stride to indicate the size of the dimension. Each of
  * these may have a static value (indicated by a template parameter giving
  * that value) or a dynamic value (indicated by a template parameter of
- * mutable_value and initial value given in the constructor).
+ * 0 and initial value given in the constructor).
  */
-template<int64_t length_value = mutable_value, int64_t stride_value =
-    mutable_value>
+template<int64_t length_value = 0, int64_t stride_value =
+    0>
 struct Span: public Length<length_value>, public Stride<stride_value> {
   typedef Length<length_value> length_type;
   typedef Stride<stride_value> stride_type;
@@ -118,7 +118,7 @@ struct Span: public Length<length_value>, public Stride<stride_value> {
    */
   Span<length_value,stride_value>& operator*=(const int64_t n) {
     /* pre-condition */
-    static_assert(stride_value == mutable_value,
+    static_assert(stride_value == 0,
         "must use a mutable stride to multiply");
 
     this->stride *= n;
@@ -130,7 +130,7 @@ struct Span: public Length<length_value>, public Stride<stride_value> {
    * Multiply stride.
    */
   auto operator*(const int64_t n) const {
-    Span<length_value,mutable_value> result(*this);
+    Span<length_value,0> result(*this);
     result *= n;
     return result;
   }

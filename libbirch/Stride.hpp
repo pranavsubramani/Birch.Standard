@@ -3,8 +3,6 @@
  */
 #pragma once
 
-#include "libbirch/mutable.hpp"
-
 namespace libbirch {
 /**
  * Stride. The number of elements, including both active and inactive elements,
@@ -22,8 +20,8 @@ struct Stride {
   }
 };
 template<>
-struct Stride<mutable_value> {
-  static const int64_t stride_value = mutable_value;
+struct Stride<0> {
+  static const int64_t stride_value = 0;
   int64_t stride;
   Stride(const int64_t stride) :
       stride(stride) {

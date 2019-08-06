@@ -3,8 +3,6 @@
  */
 #pragma once
 
-#include "libbirch/mutable.hpp"
-
 namespace libbirch {
 /**
  * Length. The number of active elements along a dimension.
@@ -21,8 +19,8 @@ struct Length {
   }
 };
 template<>
-struct Length<mutable_value> {
-  static const int64_t length_value = mutable_value;
+struct Length<0> {
+  static const int64_t length_value = 0;
   int64_t length;
 
   Length(const int64_t length) :
