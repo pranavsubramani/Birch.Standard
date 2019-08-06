@@ -30,7 +30,7 @@ class EagerPtr {
   /**
    * Constructor.
    */
-  EagerPtr(const Nil& = nil) {
+  EagerPtr(const Nil& = Nil()) {
     //
   }
 

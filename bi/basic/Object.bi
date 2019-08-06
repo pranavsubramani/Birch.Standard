@@ -65,7 +65,7 @@ function make(name:String) -> Object? {
   if (addr) {
     return reinterpret_cast<make_t*>(addr)();
   } else {
-    return libbirch::nil;
+    return libbirch::Nil();
   }
   }}
 }

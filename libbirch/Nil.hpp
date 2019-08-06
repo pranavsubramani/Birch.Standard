@@ -26,9 +26,4 @@ public:
     return std::initializer_list<T>();
   }
 };
-
-/**
- * Nil singleton.
- */
-static constexpr Nil nil;
 }

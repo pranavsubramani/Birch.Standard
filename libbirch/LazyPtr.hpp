@@ -30,7 +30,7 @@ public:
   /**
    * Constructor.
    */
-  LazyPtr(const Nil& = nil) {
+  LazyPtr(const Nil& = Nil()) {
     //
   }
 
