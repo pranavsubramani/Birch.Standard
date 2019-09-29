@@ -12,7 +12,7 @@ libbirch::LazyAny* libbirch::LazyContext::get(LazyAny* o) {
   LazyAny* prev = nullptr;
   LazyAny* next = o;
   bool frozen = true;
-  l.write();
+  l.set();
   do {
     prev = next;
     next = m.get(prev);
@@ -24,9 +24,16 @@ libbirch::LazyAny* libbirch::LazyContext::get(LazyAny* o) {
 	  next = prev;
 	}
   if (frozen) {
-    next = copy(next);
+    if (next->numShared() == 1u && next->numWeak() == 1u && next->numMemo() == 1u) {
+      /* this is the last pointer to the object, just thaw it and reuse */
+      SwapContext swapContext(this);
+      next->thaw(this);
+    } else {
+      /* copy it */
+      next = copy(next);
+    }
   }
-  l.unwrite();
+  l.unset();
   return next;
 }
 
@@ -35,7 +42,7 @@ libbirch::LazyAny* libbirch::LazyContext::pull(LazyAny* o) {
   LazyAny* prev = nullptr;
   LazyAny* next = o;
   bool frozen = true;
-  l.read();
+  l.set();
   do {
     prev = next;
     next = m.get(prev);
@@ -46,7 +53,7 @@ libbirch::LazyAny* libbirch::LazyContext::pull(LazyAny* o) {
   if (!next) {
 	  next = prev;
 	}
-  l.unread();
+  l.unset();
   return next;
 }
 
@@ -56,18 +63,23 @@ libbirch::LazyAny* libbirch::LazyContext::copy(LazyAny* o) {
   SwapContext swapContext(this);
   auto cloned = o->clone_();
   if (!o->isSingle()) {
-    frozen.store(false);  // no longer frozen, as will have new entry
+    thaw();  // new entry, so no longer considered frozen
     m.put(o, cloned);
   }
   return cloned;
 }
 
 void libbirch::LazyContext::freeze() {
-  if (!frozen.exchange(true)) {
-    l.read();
+  if (!frozen) {
+    frozen = true;
+    l.set();
     m.freeze();
-    l.unread();
+    l.unset();
   }
+}
+
+void libbirch::LazyContext::thaw() {
+  frozen = false;
 }
 
 #endif

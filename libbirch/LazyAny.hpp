@@ -6,7 +6,7 @@
 
 #include "libbirch/external.hpp"
 #include "libbirch/Counted.hpp"
-#include "libbirch/WeakPtr.hpp"
+#include "libbirch/InitPtr.hpp"
 #include "libbirch/Atomic.hpp"
 
 namespace libbirch {
@@ -70,13 +70,19 @@ public:
   LazyContext* getContext();
 
   /**
-   * Freeze.
+   * Deep freeze.
    */
   void freeze();
 
   /**
-   * Finish any remaining lazy deep clones in the subgraph reachable from
-   * this.
+   * Shallow thaw to allow reuse by another context.
+   *
+   * @param context The new context of the object.
+   */
+  void thaw(LazyContext* context);
+
+  /**
+   * Deep finish of lazy clone.
    */
   void finish();
 
@@ -90,10 +96,15 @@ public:
 protected:
   /**
    * Perform the actual freeze of the object. This is overwritten by derived
-   * classes. The non-virtual freeze() handles thread safety so that this
-   * need not.
+   * classes.
    */
   virtual void doFreeze_();
+
+  /**
+   * Perform the actual thaw of the object. This is overwritten by derived
+   * classes.
+   */
+  virtual void doThaw_(LazyContext* context);
 
   /**
    * Perform the actual finish of the object. This is overwritten by derived
@@ -104,30 +115,30 @@ protected:
   /**
    * Context in which this object was created.
    */
-  WeakPtr<LazyContext> context;
+  intptr_t context:61;
 
   /**
    * Is this frozen (read-only)?
    */
-  Atomic<bool> frozen;
+  bool frozen:1;
 
   /**
    * Is this finished?
    */
-  Atomic<bool> finished;
+  bool finished:1;
 
   #if ENABLE_SINGLE_REFERENCE_OPTIMIZATION
   /**
    * If frozen, at the time of freezing, was the reference count only one?
    */
-  Atomic<bool> single;
+  bool single:1;
   #endif
 };
 }
 
 inline libbirch::LazyAny::LazyAny() :
     Counted(),
-    context(currentContext),
+    context((intptr_t)currentContext),
     frozen(false),
     finished(false)
     #if ENABLE_SINGLE_REFERENCE_OPTIMIZATION
@@ -139,7 +150,7 @@ inline libbirch::LazyAny::LazyAny() :
 
 inline libbirch::LazyAny::LazyAny(const LazyAny& o) :
     Counted(o),
-    context(currentContext),
+    context((intptr_t)currentContext),
     frozen(false),
     finished(false)
     #if ENABLE_SINGLE_REFERENCE_OPTIMIZATION
@@ -154,30 +165,31 @@ inline libbirch::LazyAny::~LazyAny() {
 }
 
 inline bool libbirch::LazyAny::isFrozen() const {
-  return frozen.load();
+  return frozen;
 }
 
 inline bool libbirch::LazyAny::isFinished() const {
-  return finished.load();
+  return finished;
 }
 
 inline bool libbirch::LazyAny::isSingle() const {
   #if ENABLE_SINGLE_REFERENCE_OPTIMIZATION
-  return single.load();
+  return single;
   #else
   return false;
   #endif
 }
 
 inline libbirch::LazyContext* libbirch::LazyAny::getContext() {
-  return context.get();
+  return (LazyContext*)context;
 }
 
 inline void libbirch::LazyAny::freeze() {
-  if (!frozen.exchange(true)) {
+  if (!frozen) {
+    frozen = true;
     auto nshared = numShared();
     #if ENABLE_SINGLE_REFERENCE_OPTIMIZATION
-    single.store(nshared <= 1u && numWeak() <= 1u);
+    single = nshared <= 1u && numWeak() <= 1u;
     #endif
     if (nshared > 0u) {
       doFreeze_();
@@ -185,8 +197,19 @@ inline void libbirch::LazyAny::freeze() {
   }
 }
 
+inline void libbirch::LazyAny::thaw(LazyContext* context) {
+  this->context = (intptr_t)context;
+  frozen = false;
+  finished = false;
+  #if ENABLE_SINGLE_REFERENCE_OPTIMIZATION
+  single = false;
+  #endif
+  doThaw_(context);
+}
+
 inline void libbirch::LazyAny::finish() {
-  if (!finished.exchange(true)) {
+  if (!finished) {
+    finished = true;
     if (numShared() > 0u) {
       doFinish_();
     }
@@ -194,6 +217,10 @@ inline void libbirch::LazyAny::finish() {
 }
 
 inline void libbirch::LazyAny::doFreeze_() {
+  //
+}
+
+inline void libbirch::LazyAny::doThaw_(LazyContext* context) {
   //
 }
 

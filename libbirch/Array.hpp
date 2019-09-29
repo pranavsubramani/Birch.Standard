@@ -133,7 +133,12 @@ public:
   Array<T,F>& operator=(const Array<T,F>& o) {
     if (!isView && (!frame.conforms(o.frame) || isShared())) {
       lock();
-      rebase(o);
+      if (o.isView) {
+        Array<T,F> o1(o, false);
+        rebase(std::move(o1));
+      } else {
+        rebase(o);
+      }
       unlock();
     } else {
       assign(o);
@@ -149,7 +154,12 @@ public:
   Array<T,F>& operator=(const Array<U,G>& o) {
     if (!isView && (!frame.conforms(o.frame) || isShared())) {
       lock();
-      rebase(o);
+      if (o.isView) {
+        Array<T,F> o1(o, false);
+        rebase(std::move(o1));
+      } else {
+        rebase(o);
+      }
       unlock();
     } else {
       assign(o);
@@ -181,13 +191,14 @@ public:
    * conform to that of the sequence, otherwise a resize is permitted.
    */
   Array<T,F>& operator=(const typename sequence_type<T,F::count()>::type& o) {
-    if (!isView && (!frame.conforms(o.frame) || isShared())) {
+    if (!isView && (!frame.conforms(sequence_frame(o)) || isShared())) {
       lock();
       rebase(o);
       unlock();
     } else {
       assign(o);
     }
+    return *this;
   }
 
   /**
@@ -746,14 +757,14 @@ private:
    * Release the lock.
    */
   void lock() {
-    mutex.keep();
+    mutex.set();
   }
 
   /**
    * Release the lock.
    */
   void unlock() {
-    mutex.unkeep();
+    mutex.unset();
   }
 
   /**

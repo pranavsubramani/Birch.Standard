@@ -35,7 +35,13 @@ public:
    * @param value Initial value.
    */
   explicit Atomic(const T& value) {
-    #pragma omp atomic write
+    init(value);
+  }
+
+  /**
+   * Initialize the value, not atomically.
+   */
+  void init(const T& value) {
     this->value = value;
   }
 
@@ -109,6 +115,25 @@ public:
   void doubleDecrement() {
     #pragma omp atomic update
     value -= 2;
+  }
+
+  /**
+   * Add to the value, atomically, but without capturing the current value.
+   */
+  template<class U>
+  void add(const U& value) {
+    #pragma omp atomic update
+    this->value += value;
+  }
+
+  /**
+   * Subtract from the value, atomically, but without capturing the current
+   * value.
+   */
+  template<class U>
+  void subtract(const U& value) {
+    #pragma omp atomic update
+    this->value -= value;
   }
 
   template<class U>

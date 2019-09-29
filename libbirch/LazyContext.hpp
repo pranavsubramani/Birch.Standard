@@ -8,7 +8,7 @@
 #include "libbirch/LazyAny.hpp"
 #include "libbirch/LazyMemo.hpp"
 #include "libbirch/SharedPtr.hpp"
-#include "libbirch/ReaderWriterLock.hpp"
+#include "libbirch/ExclusiveLock.hpp"
 
 namespace libbirch {
 /**
@@ -73,6 +73,11 @@ public:
    */
   void freeze();
 
+  /**
+   * Thaw the memo.
+   */
+  void thaw();
+
 private:
   /**
    * Memo that maps source objects to clones.
@@ -82,13 +87,13 @@ private:
   /**
    * Lock.
    */
-  ReaderWriterLock l;
+  ExclusiveLock l;
 
   /**
    * Is this frozen? Unlike regular objects, a memo can still have new entries
    * written after it is frozen, but this flags it as unfrozen again.
    */
-  Atomic<bool> frozen;
+  bool frozen;
 };
 }
 
@@ -100,9 +105,9 @@ inline libbirch::LazyContext::LazyContext() :
 inline libbirch::LazyContext::LazyContext(LazyContext* parent) :
     frozen(parent->frozen) {
   assert(parent);
-  parent->l.write();
+  parent->l.set();
   m.copy(parent->m);
-  parent->l.unwrite();
+  parent->l.unset();
 }
 
 inline libbirch::LazyContext::~LazyContext() {

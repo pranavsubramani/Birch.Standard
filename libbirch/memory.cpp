@@ -50,7 +50,7 @@ size_t libbirch::bufferSize;
  * Create and/or return the root memo
  */
 static libbirch::Context* root() {
-  static libbirch::SharedPtr<libbirch::Context> context = libbirch::Context::create_();
+  static libbirch::SharedPtr<libbirch::Context> context(libbirch::Context::create_());
   return context.get();
 }
 
@@ -62,7 +62,7 @@ thread_local bool libbirch::cloneUnderway = false;
 void* libbirch::allocate(const size_t n) {
   assert(n > 0u);
 
-  memoryUse += n;
+  memoryUse.add(n);
 #if !ENABLE_MEMORY_POOL
   return std::malloc(n);
 #else
@@ -70,15 +70,8 @@ void* libbirch::allocate(const size_t n) {
   auto ptr = pool(64*tid + i).pop();  // attempt to reuse from this pool
   if (!ptr) {           // otherwise allocate new
     size_t m = unbin(i);
-    size_t r = (m < 64u) ? 64u : m;
-    // ^ minimum allocation 64 bytes to maintain alignment
-    ptr = (buffer += r) - r;
-    assert((char*)ptr + r <= bufferStart + bufferSize); // otherwise out of memory
-    if (m < 64u) {
-      /* add extra bytes as a separate allocation to the pool for
-       * reuse another time */
-      pool(64*tid + bin(64u - m)).push((char*)ptr + m);
-    }
+    ptr = (buffer += m) - m;
+    assert((char*)ptr + m <= bufferStart + bufferSize); // otherwise out of memory
   }
   assert(ptr);
   return ptr;
@@ -90,7 +83,7 @@ void libbirch::deallocate(void* ptr, const size_t n, const unsigned tid) {
   assert(n > 0u);
   assert(tid < nthreads);
 
-  memoryUse -= n;
+  memoryUse.subtract(n);
 #if !ENABLE_MEMORY_POOL
   std::free(ptr);
 #else
@@ -104,7 +97,7 @@ void libbirch::deallocate(void* ptr, const unsigned n, const unsigned tid) {
   assert(n > 0u);
   assert(tid < nthreads);
 
-  memoryUse -= n;
+  memoryUse.subtract(n);
 #if !ENABLE_MEMORY_POOL
   std::free(ptr);
 #else
@@ -120,9 +113,9 @@ void* libbirch::reallocate(void* ptr1, const size_t n1, const unsigned tid1, con
   assert(n2 > 0u);
 
   if (n2 > n1) {
-    memoryUse += n2 - n1;
+    memoryUse.add(n2 - n1);
   } else if (n1 > n2) {
-    memoryUse -= n1 - n2;
+    memoryUse.subtract(n1 - n2);
   }
 #if !ENABLE_MEMORY_POOL
   return std::realloc(ptr1, n2);

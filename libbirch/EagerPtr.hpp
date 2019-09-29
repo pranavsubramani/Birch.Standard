@@ -37,8 +37,7 @@ class EagerPtr {
   /**
    * Constructor.
    */
-  EagerPtr(T* object) :
-      object(object) {
+  explicit EagerPtr(T* object) : object(object) {
     //
   }
 
@@ -56,7 +55,7 @@ class EagerPtr {
   EagerPtr(const EagerPtr<P>& o) {
     if (o.object) {
       if (cloneUnderway) {
-        object = static_cast<T*>(currentContext->get(o.get()));
+        object.replace(static_cast<T*>(currentContext->get(o.get())));
       } else {
         object = o.object;
       }
@@ -95,9 +94,9 @@ class EagerPtr {
   }
 
   /**
-   * Raw pointer assignment.
+   * Value assignment.
    */
-  EagerPtr<P>& operator=(T* o) {
+  EagerPtr<P>& operator=(const P& o) {
     object = o;
     return *this;
   }
@@ -106,7 +105,7 @@ class EagerPtr {
    * Nil assignment.
    */
   EagerPtr<P>& operator=(const Nil&) {
-    object = nullptr;
+    object.release();
     return *this;
   }
 
@@ -114,7 +113,7 @@ class EagerPtr {
    * Nullptr assignment.
    */
   EagerPtr<P>& operator=(const std::nullptr_t&) {
-    object = nullptr;
+    object.release();
     return *this;
   }
 
@@ -202,7 +201,7 @@ class EagerPtr {
    */
   EagerPtr<P> clone() const {
     if (object) {
-      SharedPtr<EagerContext> context = EagerContext::create_();
+      SharedPtr<EagerContext> context(EagerContext::create_());
       SwapClone swapClone(true);
       SwapContext swapContext(context.get());
       return EagerPtr<P>(static_cast<T*>(context->copy(object.get())));
@@ -256,7 +255,7 @@ class EagerPtr {
    */
   template<class U>
   auto dynamic_pointer_cast() const {
-    return cast_type<U>(dynamic_cast<U*>(get()));
+    return cast_type<U>(dynamic_cast<U*>(get()), 0);
   }
 
   /**
@@ -264,10 +263,17 @@ class EagerPtr {
    */
   template<class U>
   auto static_pointer_cast() const {
-    return cast_type<U>(static_cast<U*>(get()));
+    return cast_type<U>(static_cast<U*>(get()), 0);
   }
 
 protected:
+  /**
+   * Constructor (for cast).
+   */
+  explicit EagerPtr(T* object, int) {
+    this->object.replace(object);
+  }
+
   /**
    * Object.
    */

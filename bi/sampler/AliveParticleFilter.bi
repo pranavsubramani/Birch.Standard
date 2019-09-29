@@ -31,7 +31,7 @@ class AliveParticleFilter < ParticleFilter {
     auto w0 <- w;
     parallel for auto n in 1..N {
       x[n] <- clone<ForwardModel>(x0[a[n]]);
-      w[n] <- w[n] + x[n].step();
+      w[n] <- x[n].step();
       cpp {{
       ++P;
       }}
@@ -76,13 +76,8 @@ class AliveParticleFilter < ParticleFilter {
   }
 
   function resample() {
-    /* just compute ancestors and offspring, don't copy */
-    if isTriggered() {
-      a <- global.resample(w);
-      w <- vector(0.0, N);
-    } else {
-      a <- iota(1, N);
-    }
+    /* just compute ancestors, don't copy or reset weights */
+    a <- global.resample(w);
   }
 
   function write(buffer:Buffer) {
