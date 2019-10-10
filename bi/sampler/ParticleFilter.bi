@@ -63,7 +63,7 @@ class ParticleFilter < ForwardSampler {
       initialize();
       start();
       reduce();
-      for auto t in 1..T {
+      for auto t in offset..T + offset{
         if verbose {
           stderr.print(" " + t);
         }
@@ -79,7 +79,10 @@ class ParticleFilter < ForwardSampler {
         stderr.print("log weight: " + sum(Z.walk()) + "\n");
       }
       finalize();
-      yield (clone<ForwardModel>(x[b]), sum(Z.walk()));
+      //yield (clone<ForwardModel>(x[b]), sum(Z.walk()));
+      for auto n in 1..N {
+    	yield (clone<ForwardModel>(x[n]), w[n]));
+	  }
     }
   }
 
