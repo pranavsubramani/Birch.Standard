@@ -81,7 +81,7 @@ class ParticleFilter < ForwardSampler {
       finalize();
       //yield (clone<ForwardModel>(x[b]), sum(Z.walk()));
       for auto n in 1..N {
-    	yield (clone<ForwardModel>(x[n]), w[n]));
+    	yield (clone<ForwardModel>(x[n]), w[n]);
 	  }
     }
   }
