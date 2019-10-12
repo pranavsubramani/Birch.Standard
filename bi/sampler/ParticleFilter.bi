@@ -63,7 +63,7 @@ class ParticleFilter < ForwardSampler {
       initialize();
       start();
       reduce();
-      for auto t in offset..T + offset{
+      for auto t in offset..T {
         if verbose {
           stderr.print(" " + t);
         }
