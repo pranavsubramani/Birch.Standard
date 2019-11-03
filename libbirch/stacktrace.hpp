@@ -9,7 +9,7 @@
 /**
  * @def libbirch_function_
  *
- * Push a new frame onto the stack trace.
+ * Push a new shape onto the stack trace.
  */
 #ifndef NDEBUG
 #define libbirch_function_(func, file, n) libbirch::StackFunction function_(func, file, n)
@@ -20,7 +20,7 @@
 /**
  * @def libbirch_line_
  *
- * Update the line number of the top frame of the stack trace.
+ * Update the line number of the top shape of the stack trace.
  */
 #ifndef NDEBUG
 #define libbirch_line_(n) libbirch::line(n)
@@ -29,16 +29,7 @@
 #endif
 
 namespace libbirch {
-/**
- * Stack frame.
- */
-struct StackFrame {
-  const char* func;
-  const char* file;
-  int line;
-};
-
-/**
+/*
  * Temporary type for pushing functions onto the stack trace.
  */
 struct StackFunction {
@@ -47,9 +38,9 @@ struct StackFunction {
 };
 
 /**
- * Update the line number of the top frame of the stack trace.
+ * Update the line number of the top shape of the stack trace.
  */
-void line(const unsigned n);
+void line(const int n);
 
 /**
  * Print stack trace and abort.
@@ -60,8 +51,8 @@ void abort();
  * Print stack trace and abort with message.
  *
  * @param msg Message.
- * @param skip Number of frames on the top of the call stack to omit from the
+ * @param skip Number of shapes on the top of the call stack to omit from the
  * stack trace.
  */
-void abort(const std::string& msg, const unsigned skip = 0);
+void abort(const std::string& msg, const int skip = 0);
 }

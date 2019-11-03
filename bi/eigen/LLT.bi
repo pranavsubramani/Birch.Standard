@@ -24,73 +24,26 @@
  *     is to maintain the original matrix in a decomposed form for more
  *     efficient computation. 
  */
-final class LLT(n:Integer) {
-  /*
-   * Eigen internals. Eigen::LLT does not support in place matrix
-   * decompositions using Eigen::Map (as of version 3.3.7, which is how Birch
-   * wraps its own array buffers for use by Eigen. instead we use an
-   * Eigen::Matrix type and copy the matrix to decompose into it later.
-   */
-  hpp{{
-  Eigen::LLT<libbirch::EigenMatrix<Real>> llt;
-  }}
-
-  /**
-   * Value conversion.
-   */
-  operator -> Real[_,_] {
-    cpp{{
-    return llt.reconstructedMatrix();
-    }}
-  }
-  
-  /**
-   * Value assignment.
-   */
-  operator <- S:Real[_,_] {
-    compute(S);
-  }
-  
-  /**
-   * Decompose the matrix positive definite matrix `S` into this.
-   */
-  function compute(S:Real[_,_]) {
-    cpp{{
-    llt.compute(S.toEigen());
-    }}
-  }
-
-  /**
-   * Rank one update (or downdate) of a Cholesky decomposition.
-   *
-   * - x: Vector.
-   * - a: Scalar. Positive for an update, negative for a downdate.
-   *
-   * Updates the symmetric positive definite matrix to $S + axx^\top$ with an
-   * efficient update of its decomposition.
-   */
-  function update(x:Real[_], a:Real) {
-    cpp{{
-    llt.rankUpdate(x.toEigen(), a);
-    }}
-  }
-}
+type LLT;
 
 operator (X:LLT*y:Real[_]) -> Real[_] {
+  assert columns(X) == length(y);
   cpp{{
-  return X->llt.matrixL()*(X->llt.matrixU()*y.toEigen()).eval();
+  return X.matrixL()*(X.matrixU()*y.toEigen()).eval();
   }}
 }
 
 operator (X:LLT*Y:Real[_,_]) -> Real[_,_] {
+  assert columns(X) == rows(Y);
   cpp{{
-  return X->llt.matrixL()*(X->llt.matrixU()*Y.toEigen()).eval();
+  return X.matrixL()*(X.matrixU()*Y.toEigen()).eval();
   }}
 }
 
 operator (X:Real[_,_]*Y:LLT) -> Real[_,_] {
+  assert columns(X) == rows(Y);
   cpp{{
-  return X.toEigen()*Y->llt.matrixL()*Y->llt.matrixU();
+  return X.toEigen()*Y.matrixL()*Y.matrixU();
   }}
 }
 
@@ -99,7 +52,7 @@ operator (X:Real[_,_]*Y:LLT) -> Real[_,_] {
  */
 function rows(X:LLT) -> Integer64 {
   cpp{{
-  return X->llt.rows();
+  return X.rows();
   }}
 }
 
@@ -108,7 +61,16 @@ function rows(X:LLT) -> Integer64 {
  */
 function columns(X:LLT) -> Integer64 {
   cpp{{
-  return X->llt.cols();
+  return X.cols();
+  }}
+}
+
+/**
+ * Convert Cholesky decomposition to an ordinary matrix.
+ */
+function matrix(X:LLT) -> Real[_,_] {
+  cpp{{
+  return X.reconstructedMatrix();
   }}
 }
 
@@ -124,9 +86,10 @@ function columns(X:LLT) -> Integer64 {
  * Cholesky factor, while this returns the original matrix, but decomposed.
  */
 function llt(S:Real[_,_]) -> LLT {
-  assert rows(S) == columns(S);
-  A:LLT(rows(S));
-  A.compute(S);
+  A:LLT;
+  cpp{{
+  A.compute(S.toEigen());
+  }}
   return A;
 }
 
@@ -142,12 +105,12 @@ function llt(S:Real[_,_]) -> LLT {
  * matrix $S + axx^\top$.
  */
 function rank_update(S:LLT, x:Real[_], a:Real) -> LLT {
-  A:LLT(rows(S));
+  assert rows(S) == length(x);
   cpp{{
-  A->llt = S->llt;
-  }}
-  A.update(x, a);
+  auto A = S;
+  A.rankUpdate(x.toEigen(), a);
   return A;
+  }}
 }
 
 /**
@@ -165,42 +128,63 @@ function rank_update(S:LLT, x:Real[_], a:Real) -> LLT {
  * columns of `X
  */
 function rank_update(S:LLT, X:Real[_,_], a:Real) -> LLT {
-  A:LLT(rows(S));
+  assert rows(S) == rows(X);
+  A:LLT;
   cpp{{
-  A->llt = S->llt;
+  A = S;
   }}
   auto R <- rows(X);
   auto C <- columns(X);
   for auto j in 1..C {
-    A.update(X[1..R,j], a);
+    auto x <- X[1..R,j];
+    cpp{{
+    A.rankUpdate(x.toEigen(), a);
+    }}
   }
   return A;
 }
 
 /**
+ * Trace of a symmetric positive-definite matrix.
+ */
+function trace(S:LLT) -> Real;
+
+/**
+ * Determinant of a symmetric positive-definite matrix.
+ */
+function det(S:LLT) -> Real;
+
+/**
+ * Logarithm of the determinant of a symmetric positive-definite matrix.
+ */
+function ldet(S:LLT) -> Real {
+  auto L <- cholesky(S);
+  auto n <- rows(S);
+  auto d <- 0.0;
+  for auto i in 1..n {
+    d <- d + log(L[i,i]);
+  }
+  return 2.0*d;
+}
+
+/**
  * Inverse of a symmetric positive definite matrix.
  */
-function inv(S:LLT) -> Real[_,_] {
-  cpp{{
-  return S->llt.solve(libbirch::EigenMatrix<bi::type::Real>::Identity(
-      S->llt.rows(), S->llt.cols()));
-  }}
-}
+function inv(S:LLT) -> Real[_,_];
 
 /**
  * Solve a system of equations with a symmetric positive definite matrix.
  */
-function solve(S:LLT, y:Real[_]) -> Real[_] {
-  cpp{{
-  return S->llt.solve(y.toEigen());
-  }}
-}
+function solve(S:LLT, y:Real[_]) -> Real[_];
 
 /**
  * Solve a system of equations with a symmetric positive definite matrix.
  */
-function solve(S:LLT, Y:Real[_,_]) -> Real[_,_] {
-  cpp{{
-  return S->llt.solve(Y.toEigen());
-  }}
-}
+function solve(S:LLT, Y:Real[_,_]) -> Real[_,_];
+
+/**
+ * Cholesky factor of a matrix, $X = LL^{\top}$.
+ *
+ * Returns: the lower-triangular factor $L$.
+ */
+function cholesky(S:LLT) -> Real[_,_];

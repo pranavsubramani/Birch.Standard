@@ -3,47 +3,40 @@
  */
 program test(N:Integer <- 10000) {
   code:Integer <- 0;
-  
-  code <- code + run_test("deep_clone_alias");
-  code <- code + run_test("deep_clone_chain");
-  code <- code + run_test("deep_clone_modify_dst");
-  code <- code + run_test("deep_clone_modify_src");
+
+  code <- code + run_test("add_bounded_discrete_delta", N);
   code <- code + run_test("beta_bernoulli", N);
   code <- code + run_test("beta_binomial", N);
   code <- code + run_test("beta_geometric", N);
   code <- code + run_test("beta_negative_binomial", N);
+  code <- code + run_test("chain_gaussian", N);
+  code <- code + run_test("chain_multivariate_gaussian", N);
+  code <- code + run_test("deep_clone_alias");
+  code <- code + run_test("deep_clone_chain");
+  code <- code + run_test("deep_clone_modify_dst");
+  code <- code + run_test("deep_clone_modify_src");
   code <- code + run_test("dirichlet_categorical", N);
   code <- code + run_test("dirichlet_multinomial", N);
-  code <- code + run_test("gamma_poisson", N);
   code <- code + run_test("gamma_exponential", N);
-  code <- code + run_test("scaled_gamma_poisson", N);
-  code <- code + run_test("scaled_gamma_exponential", N);
-  code <- code + run_test("linear_discrete_delta", N);
-  code <- code + run_test("add_bounded_discrete_delta", N);
-  code <- code + run_test("subtract_bounded_discrete_delta", N);
+  code <- code + run_test("gamma_poisson", N);
   code <- code + run_test("gaussian_gaussian", N);
-  code <- code + run_test("linear_gaussian_gaussian", N);
-  code <- code + run_test("chain_gaussian", N);
-  code <- code + run_test("inverse_gamma_gaussian", N);
   code <- code + run_test("inverse_gamma_gamma", N);
-  code <- code + run_test("normal_inverse_gamma_gaussian", N);
+  code <- code + run_test("linear_discrete_delta", N);
+  code <- code + run_test("linear_gaussian_gaussian", N);
+  code <- code + run_test("linear_matrix_normal_inverse_gamma_matrix_gaussian", N);
+  code <- code + run_test("linear_matrix_normal_inverse_wishart_matrix_gaussian", N);
+  code <- code + run_test("linear_multivariate_gaussian_multivariate_gaussian", N);
+  code <- code + run_test("linear_multivariate_normal_inverse_gamma_multivariate_gaussian", N);
   code <- code + run_test("linear_normal_inverse_gamma_gaussian", N);
-  code <- code + run_test("gaussian_log_gaussian", N);
-  code <- code + run_test("linear_gaussian_log_gaussian", N);
-  code <- code + run_test("inverse_gamma_log_gaussian", N);
-  code <- code + run_test("normal_inverse_gamma_log_gaussian", N);
-  code <- code + run_test("linear_normal_inverse_gamma_log_gaussian", N);
-  code <- code + run_test("multivariate_gaussian_gaussian", N);
-  code <- code + run_test("multivariate_linear_gaussian_gaussian", N);
-  code <- code + run_test("multivariate_dot_gaussian_gaussian", N);
-  code <- code + run_test("multivariate_dot_gaussian_log_gaussian", N);
-  code <- code + run_test("multivariate_chain_gaussian", N);
-  code <- code + run_test("multivariate_inverse_gamma_gaussian", N);
-  code <- code + run_test("multivariate_normal_inverse_gamma_gaussian", N);
-  code <- code + run_test("multivariate_linear_normal_inverse_gamma_gaussian", N);
-  code <- code + run_test("multivariate_dot_normal_inverse_gamma_gaussian", N);
-  code <- code + run_test("multivariate_dot_normal_inverse_gamma_log_gaussian", N);
-  code <- code + run_test("ridge_regression", N);
+  code <- code + run_test("matrix_normal_inverse_gamma_matrix_gaussian", N);
+  code <- code + run_test("matrix_normal_inverse_wishart_matrix_gaussian", N);
+  code <- code + run_test("multivariate_gaussian_multivariate_gaussian", N);
+  code <- code + run_test("multivariate_normal_inverse_gamma_multivariate_gaussian", N);
+  code <- code + run_test("normal_inverse_gamma", N);
+  code <- code + run_test("normal_inverse_gamma_gaussian", N);
+  code <- code + run_test("scaled_gamma_exponential", N);
+  code <- code + run_test("scaled_gamma_poisson", N);
+  code <- code + run_test("subtract_bounded_discrete_delta", N);
   
   exit(code);
 }
@@ -107,23 +100,59 @@ function pass(X1:Real[_,_], X2:Real[_,_]) -> Boolean {
   assert rows(X1) == rows(X2);
   assert columns(X1) == columns(X2);
   
-  R:Integer <- rows(X1);
-  C:Integer <- columns(X1);
+  auto R <- rows(X1);
+  auto C <- columns(X1);
+  auto failed <- 0;
+  auto tests <- 0;
+  auto ε <- 5.0/sqrt(R);
   
-  /* project onto a random unit vector for univariate comparison */
-  u:Real[_] <- simulate_uniform_unit_vector(C);  
-  x1:Real[_] <- X1*u;
-  x2:Real[_] <- X2*u;
+  /* compare marginals using 1-Wasserstein distance */
+  for auto c in 1..C {
+    /* project onto a random unit vector for univariate comparison */
+    auto x1 <- X1[1..R,c];
+    auto x2 <- X2[1..R,c];
   
-  /* normalise onto the interval [0,1] */
-  mn:Real <- min(min(x1), min(x2));
-  mx:Real <- max(max(x1), max(x2));
-  x1 <- (x1 - mn)/(mx - mn);
-  x2 <- (x2 - mn)/(mx - mn);
+    /* normalise onto the interval [0,1] */
+    auto mn <- min(min(x1), min(x2));
+    auto mx <- max(max(x1), max(x2));
+    auto z1 <- (x1 - mn)/(mx - mn);
+    auto z2 <- (x2 - mn)/(mx - mn);
+    
+    /* compute distance and suggested pass threshold */
+    auto δ <- wasserstein(z1, z2);
+    if δ > ε {
+      failed <- failed + 1;
+      stderr.print("failed on component " + c + ", " + δ + " > " + ε + "\n");
+    }
+    tests <- tests + 1;
+  }
   
-  /* compute distance and suggested pass threshold */
-  δ:Real <- wasserstein(x1, x2);
-  ε:Real <- 2.0/sqrt(R);
+  /* project onto random unit vectors and compute the univariate
+   * 1-Wasserstein distance, repeating as many times as there are
+   * dimensions */
+  for auto c in 1..C {
+    /* project onto a random unit vector for univariate comparison */
+    auto u <- simulate_uniform_unit_vector(C);  
+    auto x1 <- X1*u;
+    auto x2 <- X2*u;
   
-  return δ < ε;
+    /* normalise onto the interval [0,1] */
+    auto mn <- min(min(x1), min(x2));
+    auto mx <- max(max(x1), max(x2));
+    auto z1 <- (x1 - mn)/(mx - mn);
+    auto z2 <- (x2 - mn)/(mx - mn);
+  
+    /* compute distance and suggested pass threshold */
+    auto δ <- wasserstein(z1, z2);    
+    if δ > ε {
+      failed <- failed + 1;
+      stderr.print("failed on random projection, " + δ + " > " + ε + "\n");
+    }
+    tests <- tests + 1;
+  }
+  
+  if failed > 0 {
+    stderr.print("failed " + failed + " of " + tests + " comparisons\n");
+  }
+  return failed == 0;
 }

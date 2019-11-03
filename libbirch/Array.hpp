@@ -5,54 +5,86 @@
 
 #include "libbirch/external.hpp"
 #include "libbirch/memory.hpp"
-#include "libbirch/Frame.hpp"
+#include "libbirch/type.hpp"
+#include "libbirch/Label.hpp"
+#include "libbirch/Shape.hpp"
 #include "libbirch/Buffer.hpp"
 #include "libbirch/Iterator.hpp"
-#include "libbirch/Shared.hpp"
-#include "libbirch/Sequence.hpp"
 #include "libbirch/Eigen.hpp"
-#include "libbirch/ExclusiveLock.hpp"
+#include "libbirch/ReaderWriterLock.hpp"
 
 namespace libbirch {
 /**
- * A multidimensional array. Combines underlying data and a frame describing
- * the shape of that data. Allows the construction of views of the data,
- * where a view indexes either an individual element or some range of
- * elements.
+ * Array.
  *
- * @ingroup libbirch
- *
- * @tparam Type Value type.
- * @tparam Frame Frame type.
+ * @tparam T Value type.
+ * @tparam F Shape type.
  */
-template<class T, class F = EmptyFrame>
+template<class T, class F>
 class Array {
-  template<class U, class G>
-  friend class Array;
+  template<class U, class G> friend class Array;
 public:
+  using this_type = Array<T,F>;
+  using value_type = T;
+  using shape_type = F;
+  using eigen_type = typename eigen_type<this_type>::type;
+  using eigen_stride_type = typename eigen_stride_type<this_type>::type;
+
   /**
-   * Default constructor.
+   * Constructor.
    */
   Array() :
-      frame(),
+      shape(),
       buffer(nullptr),
       offset(0),
       isView(false) {
-    assert(frame.volume() == 0);
+    assert(shape.volume() == 0);
   }
 
   /**
    * Constructor.
    *
-   * @param frame Frame.
+   * @param shape Shape.
    */
-  Array(const F& frame) :
-      frame(frame),
+  template<IS_VALUE(T)>
+  Array(const F& shape) :
+      shape(shape),
       buffer(nullptr),
       offset(0),
       isView(false) {
     allocate();
-    initialize();
+  }
+
+  /**
+   * Constructor.
+   *
+   * @param context Current context.
+   * @param shape Shape.
+   */
+  template<IS_NOT_VALUE(T)>
+  Array(Label* context, const F& shape) :
+      shape(shape),
+      buffer(nullptr),
+      offset(0),
+      isView(false) {
+    allocate();
+    initialize(context);
+  }
+
+  /**
+   * Constructor.
+   *
+   * @param shape Shape.
+   * @param values Values.
+   */
+  template<IS_VALUE(T)>
+  Array(const F& shape, const std::initializer_list<T>& values) :
+      shape(shape),
+      buffer(nullptr),
+      offset(0),
+      isView(false) {
+    allocate();
+    std::uninitialized_copy(values.begin(), values.end(), begin());
   }
 
   /**
@@ -60,63 +92,102 @@ public:
    *
    * @tparam ...Args Constructor parameter types.
    *
-   * @param frame Frame.
-   * @param args Constructor arguments for each element.
+   * @param context Current context.
+   * @param shape Shape.
+   * @param values Values.
    */
-  template<class ... Args>
-  Array(const F& frame, Args ... args) :
-      frame(frame),
+  template<IS_NOT_VALUE(T), class U>
+  Array(Label* context, const F& shape,
+      const std::initializer_list<U>& values) :
+      shape(shape),
       buffer(nullptr),
       offset(0),
       isView(false) {
     allocate();
-    initialize(args...);
+    std::uninitialized_copy(values.begin(), values.end(), begin());
+  }
+
+  /**
+   * Constructor.
+   *
+   * @tparam ...Args Constructor parameter types.
+   *
+   * @param context Current context.
+   * @param shape Shape.
+   * @param args Constructor arguments.
+   */
+  template<IS_NOT_VALUE(T), class... Args>
+  Array(Label* context, const F& shape, Args ... args) :
+      shape(shape),
+      buffer(nullptr),
+      offset(0),
+      isView(false) {
+    allocate();
+    initialize(context, args...);
   }
 
   /**
    * Copy constructor.
-   *
-   * @param canShare Is it fine for the new array to share an underlying
-   * buffer with o (in a copy on write manner)?
    */
-  Array(const Array<T,F>& o, const bool canShare = true);
+  Array(const Array<T,F>& o) :
+      shape(o.shape),
+      buffer(o.buffer),
+      offset(o.offset),
+      isView(o.isView) {
+    if (!isView && buffer) {
+      buffer->incUsage();
+    }
+  }
 
   /**
-   * Generic copy constructor.
+   * Copy constructor.
    */
   template<class U, class G>
   Array(const Array<U,G>& o) :
-      frame(o.frame),
+      shape(o.shape.compact()),
       buffer(nullptr),
       offset(0),
       isView(false) {
     allocate();
-    copy(o);
+    uninitialized_copy(o);
+  }
+
+  /**
+   * Copy constructor.
+   */
+  template<IS_NOT_VALUE(T), class U, class G>
+  Array(Label* context, const Array<U,G>& o) :
+      shape(o.shape.compact()),
+      buffer(nullptr),
+      offset(0),
+      isView(false) {
+    allocate();
+    uninitialized_copy(context, o);
   }
 
   /**
    * Move constructor.
    */
-  Array(Array<T,F> && o) :
-      frame(o.frame),
+  Array(Array<T,F>&& o) :
+      shape(o.shape),
       buffer(o.buffer),
       offset(o.offset),
       isView(o.isView) {
     o.buffer = nullptr;
+    o.offset = 0;
   }
 
   /**
-   * Sequence constructor.
-   *
-   * @param o Sequence.
+   * Deep copy constructor.
    */
-  Array(const typename sequence_type<T,F::count()>::type& o) :
-      frame(sequence_frame(o)),
+  template<IS_NOT_VALUE(T)>
+  Array(Label* context, Label* label, const Array<T,F>& o) :
+      shape(o.shape.compact()),
       buffer(nullptr),
       offset(0),
       isView(false) {
     allocate();
-    copy(o);
+    uninitialized_copy(context, label, o);
   }
 
   /**
@@ -127,42 +198,61 @@ public:
   }
 
   /**
-   * Copy assignment. For a view the frames of the two arrays must conform,
-   * otherwise a resize is permitted.
+   * Copy assignment operator.
    */
   Array<T,F>& operator=(const Array<T,F>& o) {
-    if (!isView && (!frame.conforms(o.frame) || isShared())) {
+    return assign(o);
+  }
+
+  /**
+   * Move assignment operator.
+   */
+  Array<T,F>& operator=(Array<T,F>&& o) {
+    return assign(std::move(o));
+  }
+
+  /**
+   * Copy assignment. For a view the shapes of the two arrays must
+   * conform, otherwise a resize is permitted.
+   */
+  template<IS_VALUE(T)>
+  Array<T,F>& assign(const Array<T,F>& o) {
+    if (isView) {
+      libbirch_assert_msg_(o.shape.conforms(shape), "array sizes are different");
+      copy(o);
+    } else {
       lock();
       if (o.isView) {
-        Array<T,F> o1(o, false);
-        rebase(std::move(o1));
+        Array<T,F> tmp(o.shape, o);
+        swap(tmp);
       } else {
-        rebase(o);
+        Array<T,F> tmp(o);
+        swap(tmp);
       }
       unlock();
-    } else {
-      assign(o);
     }
     return *this;
   }
 
   /**
-   * Generic copy assignment. For a view the frames of the two arrays must
+   * Copy assignment. For a view the shapes of the two arrays must
    * conform, otherwise a resize is permitted.
    */
-  template<class U, class G>
-  Array<T,F>& operator=(const Array<U,G>& o) {
-    if (!isView && (!frame.conforms(o.frame) || isShared())) {
+  template<IS_NOT_VALUE(T)>
+  Array<T,F>& assign(Label* context, const Array<T,F>& o) {
+    if (isView) {
+      libbirch_assert_msg_(o.shape.conforms(shape), "array sizes are different");
+      copy(context, o);
+    } else {
       lock();
       if (o.isView) {
-        Array<T,F> o1(o, false);
-        rebase(std::move(o1));
+        Array<T,F> tmp(o.shape, o);
+        swap(tmp);
       } else {
-        rebase(o);
+        Array<T,F> tmp(o);
+        swap(tmp);
       }
       unlock();
-    } else {
-      assign(o);
     }
     return *this;
   }
@@ -170,96 +260,100 @@ public:
   /**
    * Move assignment.
    */
-  Array<T,F>& operator=(Array<T,F> && o) {
-    if (!isView && (!frame.conforms(o.frame) || isShared())) {
+  template<IS_NOT_VALUE(T)>
+  Array<T,F>& assign(Label* context, Array<T,F>&& o) {
+    if (isView) {
+      libbirch_assert_msg_(o.shape.conforms(shape), "array sizes are different");
+      copy(context, o);
+    } else {
       lock();
       if (o.isView) {
-        Array<T,F> o1(o, false);
-        rebase(std::move(o1));
+        Array<T,F> tmp(o.shape, o);
+        swap(tmp);
       } else {
-        rebase(std::move(o));
+        swap(o);
       }
       unlock();
-    } else {
-      assign(o);
     }
     return *this;
   }
 
   /**
-   * Generic sequence assignment. For a view the frames of array must
-   * conform to that of the sequence, otherwise a resize is permitted.
+   * Move assignment.
    */
-  Array<T,F>& operator=(const typename sequence_type<T,F::count()>::type& o) {
-    if (!isView && (!frame.conforms(sequence_frame(o)) || isShared())) {
+  template<IS_VALUE(T)>
+  Array<T,F>& assign(Array<T,F> && o) {
+    if (isView) {
+      libbirch_assert_msg_(o.shape.conforms(shape), "array sizes are different");
+      copy(o);
+    } else {
       lock();
-      rebase(o);
+      if (o.isView) {
+        Array<T,F> tmp(o.shape, o);
+        swap(tmp);
+      } else {
+        swap(o);
+      }
       unlock();
-    } else {
-      assign(o);
     }
     return *this;
   }
 
   /**
-   * Return const reference to the array. This can be used to ensure that the
-   * array is being accessed in a const context, to avoid unnecessary copying
-   * of shared buffers.
+   * Number of elements.
    */
-  const Array<T,F>& as_const() {
-    return *this;
-  }
-  const Array<T,F>& as_const() const {
-    return *this;
+  auto size() const {
+    return shape.size();
   }
 
   /**
-   * View operator.
-   *
-   * @tparam View1 View type.
-   *
-   * @param o View.
-   *
-   * @return The new array.
+   * Number of elements allocated.
    */
-  template<class View1, typename = std::enable_if_t<View1::rangeCount() != 0>>
-  auto operator()(const View1& view) {
-    return Array<T,decltype(frame(view))>(duplicate(),
-        offset + frame.serial(view), frame(view));
-  }
-  template<class View1, typename = std::enable_if_t<View1::rangeCount() != 0>>
-  auto operator()(const View1& view) const {
-    return Array<T,decltype(frame(view))>(buffer, offset + frame.serial(view),
-        frame(view));
-  }
-  template<class View1, typename = std::enable_if_t<View1::rangeCount() == 0>>
-  auto& operator()(const View1& view) {
-    return *(duplicate()->buf() + offset + frame.serial(view));
-  }
-  template<class View1, typename = std::enable_if_t<View1::rangeCount() == 0>>
-  const auto& operator()(const View1& view) const {
-    return *(buf() + frame.serial(view));
+  auto volume() const {
+    return shape.volume();
   }
 
   /**
-   * Equal comparison.
+   * @name Element access, caller not responsible for thread safety
    */
-  template<class G>
-  bool operator==(const Array<T,G>& o) const {
-    ///@todo Could optimize for arrays sharing the same buffer
-    auto first = begin();
-    auto last = first + size();
-    return frame.conforms(o.frame) && std::equal(first, last, o.begin());
+  ///@{
+  /**
+   * Slice.
+   *
+   * @tparam V Slice type.
+   *
+   * @param slice Slice.
+   *
+   * @return The resulting view or element.
+   */
+  template<class V, std::enable_if_t<V::rangeCount() != 0,int> = 0>
+  auto get(const V& slice) {
+    pinWrite();
+    unpin();
+    return Array<T,decltype(shape(slice))>(shape(slice), buffer, offset +
+        shape.serial(slice));
   }
+  template<class V, std::enable_if_t<V::rangeCount() == 0,int> = 0>
+  T& get(const V& slice) {
+    pinWrite();
+    unpin();
+    return *(buf() + shape.serial(slice));
+  }
+  template<class V, std::enable_if_t<V::rangeCount() != 0,int> = 0>
+  auto pull(const V& slice) const {
+    return Array<T,decltype(shape(slice))>(shape(slice), buffer, offset +
+        shape.serial(slice));
+  }
+  template<class V, std::enable_if_t<V::rangeCount() == 0,int> = 0>
+  T& pull(const V& slice) const {
+    return *(buf() + shape.serial(slice));
+  }
+  ///@}
 
   /**
-   * Not equal comparison.
+   * @name Element access, caller responsible for thread safety
    */
-  template<class G>
-  bool operator!=(const Array<T,G>& o) const {
-    return !(*this == o);
-  }
-
+  ///@{
   /**
    * Iterator pointing to the first element.
    *
@@ -267,54 +361,348 @@ public:
    * Elements are visited in the order in which they are stored in memory;
    * the rightmost dimension is the fastest moving (for a matrix, this is
    * "row major" order).
-   *
-   * There is no `end()` function to retrieve an iterator to
-   * one-past-the-last element. This is because a first/last pair must be
-   * created atomically for thread safety. Instead use something like:
-   *
-   *     auto first = begin();
-   *     auto last = first + size();
    */
   Iterator<T,F> begin() {
-    return Iterator<T,F>(duplicate()->buf() + offset, frame);
+    assert(!isShared());
+    return Iterator<T,F>(buf(), shape);
   }
   Iterator<T,F> begin() const {
-    return Iterator<T,F>(buf(), frame);
+    return Iterator<T,F>(buf(), shape);
+  }
+  Iterator<T,F> end() {
+    assert(!isShared());
+    return begin() + size();
+  }
+  Iterator<T,F> end() const {
+    return begin() + size();
   }
 
   /**
-   * Size (product of lengths).
+   * Slice.
+   *
+   * @tparam V Slice type.
+   *
+   * @param slice Slice.
+   *
+   * @return The resulting view or element.
    */
-  int64_t size() const {
-    return frame.size();
+  template<class V, std::enable_if_t<V::rangeCount() != 0,int> = 0>
+  auto operator()(const V& slice) {
+    assert(!isShared());
+    return Array<T,decltype(shape(slice))>(shape(slice),
+        buffer, offset + shape.serial(slice));
+  }
+  template<class V, std::enable_if_t<V::rangeCount() != 0,int> = 0>
+  auto operator()(const V& slice) const {
+    return Array<T,decltype(shape(slice))>(shape(slice),
+        buffer, offset + shape.serial(slice));
+  }
+  template<class V, std::enable_if_t<V::rangeCount() == 0,int> = 0>
+  value_type& operator()(const V& slice) {
+    assert(!isShared());
+    return *(buf() + shape.serial(slice));
+  }
+  template<class V, std::enable_if_t<V::rangeCount() == 0,int> = 0>
+  value_type operator()(const V& slice) const {
+    return *(buf() + shape.serial(slice));
   }
 
   /**
-   * Volume (number of elements allocated in buffer).
+   * Pin the buffer. This prevents substitution of the buffer by
+   * copy-on-write operations until unpinned.
    */
-  int64_t volume() const {
-    return frame.volume();
+  void pin() const {
+    const_cast<Array*>(this)->bufferLock.read();
   }
 
   /**
-   * Get the length of the @p i th dimension.
+   * As pin(), but furthermore ensures that the buffer is not shared, and
+   * thus its contents eligible for writing. If shared, a copy is performed.
+   * This is used to perform copy-on-write (if necessary) before writing the
+   * contents of the buffer.
    */
-  int64_t length(const int i) const {
-    return frame.length(i);
+  void pinWrite() {
+    assert(!isView);
+    if (isShared()) {
+      bufferLock.write();
+      if (isShared()) {
+        Array<T,F> tmp(shape, *this);
+        swap(tmp);
+      }
+      bufferLock.downgrade();
+    } else {
+      bufferLock.read();
+    }
   }
 
   /**
-   * Get the stride of the @p i th dimension.
+   * Unpin the buffer.
    */
-  int64_t stride(const int i) const {
-    return frame.stride(i);
+  void unpin() const {
+    const_cast<Array*>(this)->bufferLock.unread();
   }
 
   /**
-   * Raw pointer to underlying buffer.
+   * Lock the buffer. This is used before substitution of the buffer by a
+   * copy-on-write operation.
    */
-  T* buf() {
-    return buffer->buf() + offset;
+  void lock() {
+    bufferLock.write();
+  }
+
+  /**
+   * Unlock the buffer.
+   */
+  void unlock() {
+    bufferLock.unwrite();
+  }
+  ///@}
+
+  /**
+   * @name Thread-safe resize
+   */
+  ///@{
+  /**
+   * Shrink a one-dimensional array in-place.
+   *
+   * @tparam G Shape type.
+   *
+   * @param shape New shape.
+   */
+  template<class G>
+  void shrink(const G& shape) {
+    static_assert(F::count() == 1, "can only shrink one-dimensional arrays");
+    static_assert(G::count() == 1, "can only shrink one-dimensional arrays");
+    assert(!isView);
+    assert(shape.size() <= size());
+
+    lock();
+    auto oldSize = size();
+    auto newSize = shape.size();
+    if (newSize < oldSize) {
+      if (isShared()) {
+        Array<T,F> tmp(shape, *this);
+        swap(tmp);
+      } else {
+        if (newSize == 0) {
+          release();
+        } else {
+          auto iter = begin() + shape.size();
+          auto last = end();
+          for (; iter != last; ++iter) {
+            iter->~T();
+          }
+          // ^ C++17 use std::destroy
+          auto oldBytes = Buffer<T>::size(volume());
+          auto newBytes = Buffer<T>::size(shape.volume());
+          buffer = (Buffer<T>*)libbirch::reallocate(buffer, oldBytes,
+              buffer->tid, newBytes);
+        }
+        this->shape = shape;
+      }
+    }
+    unlock();
+  }
+
+  /**
+   * Enlarge a one-dimensional array in-place.
+   *
+   * @tparam G Shape type.
+   *
+   * @param shape New shape.
+   * @param x Value to assign to new elements.
+   */
+  template<class G>
+  void enlarge(const G& shape, const T& x) {
+    static_assert(F::count() == 1, "can only enlarge one-dimensional arrays");
+    static_assert(G::count() == 1, "can only enlarge one-dimensional arrays");
+    assert(!isView);
+    assert(shape.size() >= size());
+
+    lock();
+    auto oldSize = size();
+    auto newSize = shape.size();
+    if (newSize > oldSize) {
+      if (!buffer || isShared()) {
+        Array<T,F> tmp(shape, *this);
+        swap(tmp);
+      } else {
+        auto oldBytes = Buffer<T>::size(volume());
+        auto newBytes = Buffer<T>::size(shape.volume());
+        buffer = (Buffer<T>*)libbirch::reallocate(buffer, oldBytes,
+            buffer->tid, newBytes);
+        this->shape = shape;
+      }
+      std::uninitialized_fill(begin() + oldSize, begin() + newSize, x);
+    }
+    unlock();
+  }
+  ///@}
+
+  /**
+   * @name Eigen integration
+   */
+  ///@{
+  template<IS_VALUE(T)>
+  operator eigen_type() const {
+    return toEigen();
+  }
+
+  template<IS_VALUE(T)>
+  auto toEigen() {
+    return eigen_type(buf(), rows(), cols(), eigen_stride_type(rowStride(),
+        colStride()));
+  }
+
+  template<IS_VALUE(T)>
+  auto toEigen() const {
+    return eigen_type(buf(), rows(), cols(), eigen_stride_type(rowStride(),
+        colStride()));
+  }
+
+  /**
+   * Construct from Eigen Matrix expression.
+   */
+  template<IS_VALUE(T), class EigenType, std::enable_if_t<is_eigen_compatible<this_type,EigenType>::value,int> = 0>
+  Array(const Eigen::MatrixBase<EigenType>& o) :
+      shape(o.rows(), o.cols()),
+      buffer(nullptr),
+      offset(0),
+      isView(false) {
+    allocate();
+    toEigen() = o;
+  }
+
+  /**
+   * Construct from Eigen DiagonalWrapper expression.
+   */
+  template<IS_VALUE(T), class EigenType, std::enable_if_t<is_diagonal_compatible<this_type,EigenType>::value,int> = 0>
+  Array(const Eigen::DiagonalWrapper<EigenType>& o) :
+      shape(o.rows(), o.cols()),
+      buffer(nullptr),
+      offset(0),
+      isView(false) {
+    allocate();
+    toEigen() = o;
+  }
+
+  /**
+   * Construct from Eigen TriangularWrapper expression.
+   */
+  template<IS_VALUE(T), class EigenType, unsigned Mode, std::enable_if_t<is_triangle_compatible<this_type,EigenType>::value,int> = 0>
+  Array(const Eigen::TriangularView<EigenType,Mode>& o)  :
+      shape(o.rows(), o.cols()),
+      buffer(nullptr),
+      offset(0),
+      isView(false) {
+    allocate();
+    toEigen() = o;
+  }
+
+  /**
+   * Number of rows. For a vectoor, this is the length.
+   */
+  auto rows() const {
+    assert(1 <= F::count() && F::count() <= 2);
+    return shape.length(0);
+  }
+
+  /**
+   * Number of columns. For a vector, this is 1.
+   */
+  auto cols() const {
+    assert(1 <= F::count() && F::count() <= 2);
+    return F::count() == 1 ? 1 : shape.length(1);
+  }
+
+  /**
+   * Stride between rows.
+   */
+  auto rowStride() const {
+    assert(1 <= F::count() && F::count() <= 2);
+    return F::count() == 1 ? shape.volume() : shape.stride(0);
+  }
+
+  /**
+   * Stride between columns.
+   */
+  auto colStride() const {
+    assert(1 <= F::count() && F::count() <= 2);
+    return F::count() == 1 ? shape.stride(0) : shape.stride(1);
+  }
+  ///@}
+
+  template<IS_VALUE(T)>
+  void freeze() {
+    //
+  }
+
+  template<IS_NOT_VALUE(T)>
+  void freeze() {
+    pin();
+    auto iter = begin();
+    auto last = end();
+    unpin();
+    for (; iter != last; ++iter) {
+      iter->freeze();
+    }
+  }
+
+  template<IS_VALUE(T)>
+  void thaw(Label* label) {
+    //
+  }
+
+  template<IS_NOT_VALUE(T)>
+  void thaw(Label* label) {
+    pin();
+    auto iter = begin();
+    auto last = end();
+    unpin();
+    for (; iter != last; ++iter) {
+      iter->thaw(label);
+    }
+  }
+
+  template<IS_VALUE(T)>
+  void finish() {
+    //
+  }
+
+  template<IS_NOT_VALUE(T)>
+  void finish() {
+    pin();
+    auto iter = begin();
+    auto last = end();
+    unpin();
+    for (; iter != last; ++iter) {
+      iter->finish();
+    }
+  }
+
+private:
+  /**
+   * Constructor for forced copy.
+   */
+  template<class U, class G>
+  Array(const F& shape, const Array<U,G>& o) :
+      shape(shape.compact()),
+      buffer(nullptr),
+      offset(0),
+      isView(false) {
+    allocate();
+    uninitialized_copy(o);
+  }
+
+  /**
+   * Constructor for views.
+   */
+  Array(const F& shape, Buffer<T>* buffer, int64_t offset) :
+      shape(shape),
+      buffer(buffer),
+      offset(offset),
+      isView(true) {
+    //
   }
 
   /**
@@ -325,428 +713,6 @@ public:
   }
 
   /**
-   * Shrink a one-dimensional array in-place.
-   *
-   * @tparam G Frame type.
-   *
-   * @param frame New frame.
-   */
-  template<class G>
-  void shrink(const G& frame) {
-    static_assert(F::count() == 1, "can only shrink one-dimensional arrays");
-    static_assert(G::count() == 1, "can only shrink one-dimensional arrays");
-    assert(!isView);
-    assert(buffer);
-    assert(frame.size() < size());
-
-    lock();
-    if (isShared()) {
-      rebase(Array<T,F>(*this, frame));
-    } else {
-      Iterator<T,F> iter(buf(), frame);
-      // ^ don't use begin() as we have obtained the lock already
-      auto last = iter + size();
-      for (iter += frame.size(); iter != last; ++iter) {
-        iter->~T();
-      }
-      if (frame.size() == 0) {
-        release();
-      } else {
-        auto oldBuffer = buffer;
-        auto oldSize = Buffer<T>::size(volume());
-        auto newSize = Buffer<T>::size(frame.volume());
-        buffer = (Buffer<T>*)libbirch::reallocate(oldBuffer, oldSize,
-            oldBuffer->tid, newSize);
-      }
-      this->frame.resize(frame);
-    }
-    unlock();
-  }
-
-  /**
-   * Enlarge a one-dimensional array in-place.
-   *
-   * @tparam G Frame type.
-   *
-   * @param frame New frame.
-   * @param x Value to assign to new elements.
-   */
-  template<class G>
-  void enlarge(const G& frame, const T& x) {
-    static_assert(F::count() == 1, "can only enlarge one-dimensional arrays");
-    static_assert(G::count() == 1, "can only enlarge one-dimensional arrays");
-    assert(!isView);
-    assert(frame.size() > size());
-
-    lock();
-    if (isShared() || !buffer) {
-      rebase(Array<T,F>(*this, frame, x));
-    } else {
-      auto oldVolume = this->frame.volume();
-      this->frame.resize(frame);
-      auto oldBuffer = buffer;
-      auto oldSize = Buffer<T>::size(oldVolume);
-      auto newSize = Buffer<T>::size(frame.volume());
-      buffer = (Buffer<T>*)libbirch::reallocate(oldBuffer, oldSize,
-          oldBuffer->tid, newSize);
-      Iterator<T,F> iter(buf(), frame);
-      // ^ don't use begin() as we have obtained the lock already
-      std::uninitialized_fill(iter + oldVolume, iter + frame.size(), x);
-    }
-    unlock();
-  }
-
-  /**
-   * @name Eigen integration
-   *
-   * These functions and operators permit the implicit conversion between
-   * Birch Array types and Eigen Matrix types.
-   */
-  ///@{
-  /*
-   * Compatibility check.
-   */
-  template<class DerivedType>
-  struct is_eigen_compatible {
-    static const bool value =
-        std::is_same<T,typename DerivedType::value_type>::value
-            && ((F::count() == 1 && DerivedType::ColsAtCompileTime == 1)
-                || (F::count() == 2
-                    && DerivedType::ColsAtCompileTime == Eigen::Dynamic));
-  };
-
-  /**
-   * Appropriate Eigen Matrix type for this Birch Array type.
-   */
-  using EigenType = typename std::conditional<F::count() == 2,
-  EigenMatrixMap<T>,
-  typename std::conditional<F::count() == 1,
-  EigenVectorMap<T>,
-  void>::type>::type;
-
-  using EigenStrideType = typename std::conditional<F::count() == 2,
-  EigenMatrixStride,
-  typename std::conditional<F::count() == 1,
-  EigenVectorStride,
-  void>::type>::type;
-
-  /**
-   * Explicitly convert to Eigen matrix type.
-   */
-  EigenType toEigen() {
-    return EigenType(duplicate()->buf() + offset, length(0),
-        (F::count() == 1 ? 1 : length(1)),
-        (F::count() == 1 ?
-            EigenStrideType(volume(), stride(0)) :
-            EigenStrideType(stride(0), stride(1))));
-  }
-
-  /**
-   * @copydoc toEigen
-   */
-  EigenType toEigen() const {
-    return EigenType(buf(), length(0),
-        (F::count() == 1 ? 1 : length(1)),
-        (F::count() == 1 ?
-            EigenStrideType(volume(), stride(0)) :
-            EigenStrideType(stride(0), stride(1))));
-  }
-
-  /**
-   * Implicitly convert to Eigen matrix type.
-   */
-  operator EigenType() {
-    return toEigen();
-  }
-
-  /**
-   * @copydoc EigenType
-   */
-  operator EigenType() const {
-    return toEigen();
-  }
-
-  /**
-   * Construct with new allocation and copy in existing array from Eigen
-   * Matrix expression.
-   *
-   * @param o Existing array.
-   * @param frame Frame.
-   *
-   * Memory is allocated for the array, and is freed on destruction. After
-   * allocation, the contents of the existing array are copied in.
-   */
-  template<class DerivedType, typename = std::enable_if_t<
-      is_eigen_compatible<DerivedType>::value>>
-  Array(const Eigen::MatrixBase<DerivedType>& o, const F& frame) :
-      frame(frame),
-      buffer(nullptr),
-      offset(0),
-      isView(false) {
-    allocate();
-    toEigen() = o;  // buffer uninitialized, but okay as type is primitive
-  }
-
-  /**
-   * Construct from Eigen Matrix expression.
-   */
-  template<class DerivedType, typename = std::enable_if_t<
-      is_eigen_compatible<DerivedType>::value>>
-  Array(const Eigen::MatrixBase<DerivedType>& o) :
-      frame(o.rows(), o.cols()),
-      buffer(nullptr),
-      offset(0),
-      isView(false) {
-    allocate();
-    toEigen() = o;  // buffer uninitialized, but okay as type is primitive
-  }
-
-  /**
-   * Assign from Eigen Matrix expression.
-   */
-  template<class DerivedType, typename = std::enable_if_t<
-      is_eigen_compatible<DerivedType>::value>>
-  Array<T,F>& operator=(const Eigen::MatrixBase<DerivedType>& o) {
-    if (!isView && (!frame.conforms(o.rows(), o.cols()) || isShared())) {
-      lock();
-      rebase(o);
-      unlock();
-    } else {
-      toEigen() = o;
-    }
-    return *this;
-  }
-  ///@}
-
-private:
-  /**
-   * Constructor for view.
-   *
-   * @param buffer Buffer.
-   * @param offset Offset.
-   * @param frame Frame.
-   */
-  Array(Buffer<T>* buffer, const int64_t offset, const F& frame) :
-      frame(frame),
-      buffer(buffer),
-      offset(offset),
-      isView(true) {
-    //
-  }
-
-  /**
-   * Constructor for enlarging a one dimensional array.
-   *
-   * @tparam G Frame type.
-   *
-   * @param o Original array.
-   * @param frame Frame.
-   * @param x Value to assign to new elements.
-   */
-  template<class G>
-  Array(const Array<T,F>& o, const G& frame, const T& x) :
-      frame(frame),
-      buffer(nullptr),
-      offset(0),
-      isView(false) {
-    allocate();
-    auto first = o.begin();
-    auto iter = begin();
-    std::uninitialized_copy(first, first + o.frame.size(), iter);
-    std::uninitialized_fill(iter + o.frame.size(), iter + frame.size(), x);
-  }
-
-  /**
-   * Constructor for shrinking a one dimensional array.
-   *
-   * @tparam G Frame type.
-   *
-   * @param o Original array.
-   * @param frame Frame.
-   */
-  template<class G>
-  Array(const Array<T,F>& o, const G& frame) :
-      frame(frame),
-      buffer(nullptr),
-      offset(0),
-      isView(false) {
-    allocate();
-    auto first = o.begin();
-    auto last = first + frame.size();
-    auto iter = begin();
-    std::uninitialized_copy(first, last, iter);
-  }
-
-  /**
-   * Allocate memory for array, leaving uninitialized.
-   */
-  void allocate() {
-    assert(!buffer);
-    auto size = Buffer<T>::size(frame.volume());
-    if (size > 0) {
-      auto tmp = new (libbirch::allocate(size)) Buffer<T>();
-      tmp->incUsage();
-      buffer = tmp;
-    }
-  }
-
-  /**
-   * Duplicate underlying buffer by copy.
-   */
-  Buffer<T>* duplicate() {
-    if (!isView) {
-      lock();
-      if (isShared()) {
-        Array<T,F> o1(*this, false);
-        rebase(std::move(o1));
-      }
-      assert(!isShared());
-      auto ptr = buffer;
-      unlock();
-      return ptr;
-    } else {
-      return buffer;
-    }
-  }
-
-  /**
-   * Rebase to match the contents of an existing array (possibly sharing a
-   * buffer with it, using copy on write).
-   */
-  void rebase(const Array<T,F>& o) {
-    assert(!isView);
-    Array<T,F> o1(o);
-    // ^ the copy must be named like this, not a temporary, to avoid copy
-    //   elision, i.e. rebase(std::move(Array<T,F>(o))) may elide
-    rebase(std::move(o1));
-  }
-
-  /**
-   * Rebase to match the contents of an existing array (possibly sharing a
-   * buffer with it, using copy on write).
-   */
-  void rebase(Array<T,F> && o) {
-    assert(!isView);
-    assert(!o.isView);
-    std::swap(frame, o.frame);
-    std::swap(buffer, o.buffer);
-  }
-
-  /**
-   * Deallocate memory of array.
-   */
-  void release() {
-    if (!isView) {
-      if (buffer && buffer->decUsage() == 0) {
-        Iterator<T,F> iter(buffer->buf() + offset, frame);
-        // ^ just erased buffer, so can't use begin()
-        auto last = iter + size();
-        for (; iter != last; ++iter) {
-          iter->~T();
-        }
-        size_t size = Buffer<T>::size(frame.volume());
-        libbirch::deallocate(buffer, size, buffer->tid);
-        buffer = nullptr;
-      }
-    }
-  }
-
-  /**
-   * Initialize allocated memory.
-   *
-   * @param args Constructor arguments.
-   */
-  template<class ... Args>
-  void initialize(Args ... args) {
-    auto iter = begin();
-    auto last = iter + size();
-    for (; iter != last; ++iter) {
-      emplace(*iter, args...);
-    }
-  }
-
-  /**
-   * Copy from another array.
-   */
-  template<class U, class G>
-  void copy(const Array<U,G>& o) {
-    assert(!isShared());
-    libbirch_assert_msg_(o.frame.conforms(frame), "array sizes are different");
-    auto first = o.begin();
-    auto last = first + o.size();
-    std::uninitialized_copy(first, last, begin());
-  }
-
-  void copy(const typename sequence_type<T,F::count()>::type& o) {
-    assert(!isShared());
-    libbirch_assert_msg_(frame.conforms(sequence_frame(o)),
-        "array size and sequence size are different");
-    auto iter = begin();
-    sequence_copy(iter, o);
-  }
-
-  /**
-   * Assign from another array.
-   */
-  template<class U, class G>
-  void assign(const Array<U,G>& o) {
-    assert(!isShared());
-    libbirch_assert_msg_(o.frame.conforms(frame), "array sizes are different");
-
-    auto begin1 = o.begin();
-    auto end1 = begin1 + o.size();
-    auto begin2 = begin();
-    auto end2 = begin2 + size();
-    if (inside(begin1, end1, begin2)) {
-      /* copy backward */
-      while (begin1 != end1) {
-        --end1;
-        --end2;
-        *end2 = static_cast<T>(*end1);
-      }
-    } else {
-      /* copy forward */
-      while (begin1 != end1) {
-        *begin2 = static_cast<T>(*begin1);
-        ++begin1;
-        ++begin2;
-      }
-    }
-    // ^ std::copy_backward and std::copy could be used here, but explicit
-    //   cast required when Shared<T> on left and some other U on right
-  }
-
-  void assign(const typename sequence_type<T,F::count()>::type& o) {
-    assert(!isShared());
-    libbirch_assert_msg_(frame.conforms(sequence_frame(o)),
-        "array size and sequence size are different");
-    auto iter = begin();
-    sequence_assign(iter, o);
-  }
-
-  /**
-   * Construct element of value type in place.
-   *
-   * @param o Element.
-   * @param args Constructor arguments.
-   */
-  template<class U, class ... Args>
-  static void emplace(U& o, Args ... args) {
-    new (&o) U(args...);
-  }
-
-  /**
-   * Construct element of shared pointer type in place.
-   *
-   * @param o Element.
-   * @param args Constructor arguments.
-   */
-  template<class U, class ... Args>
-  static void emplace(Shared<U>& o, Args ... args) {
-    new (&o) Shared<U>(U::create_(args...));
-  }
-
-  /**
    * Is the buffer shared with one or more other arrays?
    */
   bool isShared() const {
@@ -754,23 +720,145 @@ private:
   }
 
   /**
-   * Release the lock.
+   * Swap with another array.
    */
-  void lock() {
-    mutex.set();
+  void swap(Array<T,F>& o) {
+    assert(!isView);
+    assert(!o.isView);
+    std::swap(buffer, o.buffer);
+    std::swap(shape, o.shape);
+    std::swap(offset, o.offset);
   }
 
   /**
-   * Release the lock.
+   * Allocate memory for array, leaving uninitialized.
    */
-  void unlock() {
-    mutex.unset();
+  void allocate() {
+    assert(!buffer);
+    auto bytes = Buffer<T>::size(volume());
+    if (bytes > 0u) {
+      buffer = new (libbirch::allocate(bytes)) Buffer<T>();
+      offset = 0;
+    }
   }
 
   /**
-   * Frame.
+   * Deallocate memory of array.
    */
-  F frame;
+  void release() {
+    if (!isView && buffer && buffer->decUsage() == 0) {
+      auto iter = begin();
+      auto last = end();
+      for (; iter != last; ++iter) {
+        iter->~T();
+      }
+      // ^ C++17 use std::destroy
+      size_t bytes = Buffer<T>::size(volume());
+      libbirch::deallocate(buffer, bytes, buffer->tid);
+    }
+    buffer = nullptr;
+    offset = 0;
+  }
+
+  /**
+   * Initialize allocated memory.
+   *
+   * @param args Constructor arguments.
+   */
+  template<IS_NOT_VALUE(T), class ... Args>
+  void initialize(Label* context, Args ... args) {
+    auto iter = begin();
+    auto last = end();
+    for (; iter != last; ++iter) {
+      new (&*iter) T(context, new typename T::value_type(context, args...));
+    }
+  }
+
+  /**
+   * Assign from another array.
+   */
+  template<IS_VALUE(T), class U>
+  void copy(const U& o) {
+    auto n = std::min(size(), o.size());
+    auto begin1 = o.begin();
+    auto end1 = begin1 + n;
+    auto begin2 = begin();
+    auto end2 = begin2 + n;
+    if (inside(begin1, end1, begin2)) {
+      std::copy_backward(begin1, end1, end2);
+    } else {
+      std::copy(begin1, end1, begin2);
+    }
+  }
+
+  /**
+   * Assign from another array.
+   */
+  template<IS_NOT_VALUE(T), class U>
+  void copy(Label* context, const U& o) {
+    auto n = std::min(size(), o.size());
+    auto begin1 = o.begin();
+    auto end1 = begin1 + n;
+    auto begin2 = begin();
+    auto end2 = begin2 + n;
+    if (inside(begin1, end1, begin2)) {
+      for (; end1 != begin1; --end1, --end2) {
+        (end2 - 1)->assign(context, *(end1 - 1));
+      }
+    } else {
+      for (; begin1 != end1; ++begin1, ++begin2) {
+        begin2->assign(context, *begin1);
+      }
+    }
+  }
+
+  /**
+   * Copy from another array.
+   */
+  template<class U>
+  void uninitialized_copy(const U& o) {
+    assert(!isShared());
+    auto n = std::min(size(), o.size());
+    auto begin1 = o.begin();
+    auto end1 = begin1 + n;
+    auto begin2 = begin();
+    std::uninitialized_copy(begin1, end1, begin2);
+  }
+
+  /**
+   * Copy from another array.
+   */
+  template<IS_NOT_VALUE(T), class U>
+  void uninitialized_copy(Label* context, const U& o) {
+    assert(!isShared());
+    auto n = std::min(size(), o.size());
+    auto begin1 = o.begin();
+    auto end1 = begin1 + n;
+    auto begin2 = begin();
+    for (; begin1 != end1; ++begin1, ++begin2) {
+      new (&*begin2) T(context, *begin1);
+    }
+  }
+
+  /**
+   * Deep copy from another array.
+   */
+  template<IS_NOT_VALUE(T), class U>
+  void uninitialized_copy(Label* context, Label* label, const U& o) {
+    assert(!isShared());
+    auto n = std::min(size(), o.size());
+    auto begin1 = o.begin();
+    auto end1 = begin1 + n;
+    auto begin2 = begin();
+    for (; begin1 != end1; ++begin1, ++begin2) {
+      new (&*begin2) T(context, label, *begin1);
+    }
+  }
+
+  /**
+   * Shape.
+   */
+  F shape;
 
   /**
    * Buffer.
@@ -789,36 +877,16 @@ private:
   bool isView;
 
   /**
-   * Lock used for copy on write.
+   * Lock used for copy-on-write. Read use is obtained when the current
+   * buffer must be preserved for either read or write operations. Write use
+   * is obtained to substitute the current buffer with another.
    */
-  ExclusiveLock mutex;
+  ReaderWriterLock bufferLock;
 };
-}
-
-#include "libbirch/value.hpp"
 
 template<class T, class F>
-libbirch::Array<T,F>::Array(const Array<T,F>& o, const bool canShare) :
-    frame(o.frame),
-    buffer(nullptr),
-    offset(0),
-    isView(false) {
-  if (!canShare || (cloneUnderway && !is_value<T>::value)) {
-    /* either the caller has explicitly requested a copy (canShare), or we
-     * are cloning an array that is not of purely value type, in which case
-     * we must copy for correct bookkeeping under the lazy deep clone
-     * rules */
-    allocate();
-    copy(o);
-  } else {
-    auto tmp = o.buffer;
-    if (tmp && !o.isView) {
-      /* views do not increment the buffer use count, as they are meant to be
-       * temporary and should not outlive the buffer itself */
-      tmp->incUsage();
-    }
-    buffer = tmp;
-    offset = o.offset;
-    isView = o.isView;
-  }
+struct is_value<Array<T,F>> {
+  static const bool value = is_value<T>::value;
+};
+
 }

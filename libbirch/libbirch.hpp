@@ -12,29 +12,26 @@
 #include "libbirch/stacktrace.hpp"
 #include "libbirch/class.hpp"
 #include "libbirch/basic.hpp"
-#include "libbirch/clone.hpp"
+#include "libbirch/type.hpp"
 #include "libbirch/thread.hpp"
-#include "libbirch/freeze.hpp"
-#include "libbirch/thaw.hpp"
-#include "libbirch/finish.hpp"
-#include "libbirch/value.hpp"
 
-#include "libbirch/Span.hpp"
+#include "libbirch/SharedPtr.hpp"
+#include "libbirch/WeakPtr.hpp"
+#include "libbirch/InitPtr.hpp"
+#include "libbirch/Lazy.hpp"
+#include "libbirch/Dimension.hpp"
 #include "libbirch/Index.hpp"
 #include "libbirch/Range.hpp"
-#include "libbirch/Frame.hpp"
-#include "libbirch/View.hpp"
+#include "libbirch/Shape.hpp"
+#include "libbirch/Slice.hpp"
 #include "libbirch/Array.hpp"
-#include "libbirch/Sequence.hpp"
+#include "libbirch/Tuple.hpp"
+#include "libbirch/Tie.hpp"
 #include "libbirch/Any.hpp"
 #include "libbirch/Optional.hpp"
 #include "libbirch/Nil.hpp"
-#include "libbirch/Init.hpp"
-#include "libbirch/Shared.hpp"
-#include "libbirch/Weak.hpp"
 #include "libbirch/FiberState.hpp"
 #include "libbirch/Fiber.hpp"
-#include "libbirch/SwapContext.hpp"
 #include "libbirch/Eigen.hpp"
 #include "libbirch/EigenFunctions.hpp"
 #include "libbirch/EigenOperators.hpp"
@@ -47,19 +44,37 @@ namespace libbirch {
  * Default array for `D` dimensions.
  */
 template<class T, int D>
-using DefaultArray = Array<T,typename DefaultFrame<D>::type>;
+using DefaultArray = Array<T,typename DefaultShape<D>::type>;
 
 /**
- * Default view for `D`-dimensional indexing of a single element.
+ * Default slice for `D`-dimensional indexing of a single element.
  */
 template<int D>
-struct DefaultView {
-  typedef NonemptyView<Index<>,typename DefaultView<D - 1>::type> type;
+struct DefaultSlice {
+  typedef Slice<Index<>,typename DefaultSlice<D - 1>::type> type;
 };
 template<>
-struct DefaultView<0> {
-  typedef EmptyView type;
+struct DefaultSlice<0> {
+  typedef EmptySlice type;
 };
+
+/**
+ * Lazy shared pointer.
+ */
+template<class T>
+using LazySharedPtr = Lazy<SharedPtr<T>>;
+
+/**
+ * Lazy weak pointer.
+ */
+template<class T>
+using LazyWeakPtr = Lazy<WeakPtr<T>>;
+
+/**
+ * Lazy init pointer.
+ */
+template<class T>
+using LazyInitPtr = Lazy<InitPtr<T>>;
 
 /**
  * Make a range.
@@ -75,110 +90,142 @@ inline Range<> make_range(const int64_t start, const int64_t end) {
 }
 
 /**
- * Make a frame, no arguments.
+ * Make a shape, no arguments.
  *
  * @ingroup libbirch
  */
-inline EmptyFrame make_frame() {
-  return EmptyFrame();
+inline EmptyShape make_shape() {
+  return EmptyShape();
 }
 
 /**
- * Make a frame, single argument.
+ * Make a shape, single argument.
  *
  * @ingroup libbirch
  */
-inline NonemptyFrame<Span<>,EmptyFrame> make_frame(const int64_t arg) {
-  auto tail = EmptyFrame();
-  auto head = Span<>(arg, tail.volume());
-  return NonemptyFrame<Span<>,EmptyFrame>(head, tail);
+inline Shape<Dimension<>,EmptyShape> make_shape(const int64_t arg) {
+  auto tail = EmptyShape();
+  auto head = Dimension<>(arg, tail.volume());
+  return Shape<Dimension<>,EmptyShape>(head, tail);
 }
 
 /**
- * Make a frame, multiple arguments.
+ * Make a shape, multiple arguments.
  *
  * @ingroup libbirch
  */
 template<class ... Args>
-auto make_frame(const int64_t arg, Args ... args) {
-  auto tail = make_frame(args...);
-  auto head = Span<>(arg, tail.volume());
-  return NonemptyFrame<decltype(head),decltype(tail)>(head, tail);
+auto make_shape(const int64_t arg, Args ... args) {
+  auto tail = make_shape(args...);
+  auto head = Dimension<>(arg, tail.volume());
+  return Shape<decltype(head),decltype(tail)>(head, tail);
 }
 
 /**
- * Make a view, no arguments.
+ * Make a shape, recursively.
  *
  * @ingroup libbirch
  */
-inline EmptyView make_view() {
-  return EmptyView();
+template<class ... Args>
+auto make_shape(const int64_t arg, const Shape<Args...>& tail) {
+  auto head = Dimension<>(arg, tail.volume());
+  return Shape<decltype(head),decltype(tail)>(head, tail);
 }
 
 /**
- * Make a view, single argument.
+ * Make a slice, no arguments.
+ *
+ * @ingroup libbirch
+ */
+inline EmptySlice make_slice() {
+  return EmptySlice();
+}
+
+/**
+ * Make a slice, single argument.
  *
  * @ingroup libbirch
  */
 template<int64_t offset_value, int64_t length_value>
-auto make_view(const Range<offset_value,length_value>& arg) {
+auto make_slice(const Range<offset_value,length_value>& arg) {
   auto head = arg;
-  auto tail = make_view();
-  return NonemptyView<decltype(head),decltype(tail)>(head, tail);
+  auto tail = make_slice();
+  return Slice<decltype(head),decltype(tail)>(head, tail);
 }
 
 /**
- * Make a view, single argument.
+ * Make a slice, single argument.
  *
  * @ingroup libbirch
  */
-inline NonemptyView<Index<>,EmptyView> make_view(const int64_t arg) {
+inline Slice<Index<>,EmptySlice> make_slice(const int64_t arg) {
   auto head = Index<>(arg);
-  auto tail = EmptyView();
-  return NonemptyView<Index<>,EmptyView>(head, tail);
+  auto tail = EmptySlice();
+  return Slice<Index<>,EmptySlice>(head, tail);
 }
 
 /**
- * Make a view, multiple arguments.
+ * Make a slice, multiple arguments.
  *
  * @ingroup libbirch
  */
 template<int64_t offset_value, int64_t length_value, class ... Args>
-auto make_view(const Range<offset_value,length_value>& arg, Args ... args) {
+auto make_slice(const Range<offset_value,length_value>& arg, Args ... args) {
   auto head = arg;
-  auto tail = make_view(args...);
-  return NonemptyView<decltype(head),decltype(tail)>(head, tail);
+  auto tail = make_slice(args...);
+  return Slice<decltype(head),decltype(tail)>(head, tail);
 }
 
 /**
- * Make a view, multiple arguments.
+ * Make a slice, multiple arguments.
  *
  * @ingroup libbirch
  */
 template<class ... Args>
-auto make_view(const int64_t arg, Args ... args) {
-  auto head = Index<0>(arg);
-  auto tail = make_view(args...);
-  return NonemptyView<decltype(head),decltype(tail)>(head, tail);
+auto make_slice(const int64_t arg, Args ... args) {
+  auto head = Index<mutable_value>(arg);
+  auto tail = make_slice(args...);
+  return Slice<decltype(head),decltype(tail)>(head, tail);
 }
 
 /**
- * Make an array.
+ * Make an array of value type.
  *
  * @ingroup libbirch
  *
- * @tparam Type Value type.
- * @tparam Frame Frame type.
+ * @tparam T Value type.
+ * @tparam F Shape type.
  * @tparam Args Constructor parameter types.
  *
- * @param frame Frame.
+ * @param shape Shape.
  * @param args Constructor arguments.
  *
  * @return The array.
  */
-template<class Type, class Frame, class ... Args>
-auto make_array(const Frame& frame, Args ... args) {
-  return Array<Type,Frame>(frame, args...);
+template<class T, class F, class ... Args>
+Array<T,F> make_array(const F& shape, const Args&... args) {
+  return Array<T,F>(shape, args...);
+}
+
+/**
+ * Make an array of non-value type.
+ *
+ * @ingroup libbirch
+ *
+ * @tparam T Value type.
+ * @tparam F Shape type.
+ * @tparam Args Constructor parameter types.
+ *
+ * @param context Current context.
+ * @param shape Shape.
+ * @param args Constructor arguments.
+ *
+ * @return The array.
+ */
+template<class T, class F, class ... Args>
+Array<T,F> make_array(Label* context, const F& shape,
+    const Args&... args) {
+  return Array<T,F>(context, shape, args...);
 }
 
 /**
@@ -186,20 +233,20 @@ auto make_array(const Frame& frame, Args ... args) {
  *
  * @ingroup libbirch
  *
- * @tparam Type Value type.
- * @tparam Frame Frame type.
+ * @tparam T Value type.
+ * @tparam F Shape type.
  * @tparam Value Initial value type.
  *
- * @param frame Frame.
+ * @param shape Shape.
  * @param value Initial value.
  *
  * @return The array.
  */
-template<class Type, class Frame, class Value>
-auto make_array_and_assign(const Frame& frame, const Value& value) {
-  Frame zero;
-  auto result = Array<Type,Frame>(zero);
-  result.enlarge(frame, value);
+template<class T, class F, class Value>
+Array<T,F> make_array_and_assign(const F& shape,
+    const Value& value) {
+  Array<T,F> result;
+  result.enlarge(shape, value);
   return result;
 }
 
@@ -208,48 +255,186 @@ auto make_array_and_assign(const Frame& frame, const Value& value) {
  *
  * @ingroup libbirch
  *
- * @tparam Type Object type.
+ * @tparam T Object type.
  * @tparam Args Constructor parameter types.
  *
+ * @param context Current context.
  * @param args Constructor arguments.
  *
- * @return A shared pointer to the new object.
+ * @return A raw pointer to the new object.
  */
-template<class Type, class ... Args>
-SharedPtr<Type> make_object(Args ... args) {
-  return SharedPtr<Type>(Type::create_(args...));
+template<class T, class ... Args>
+T* make_object(Label* context, const Args& ... args) {
+  return new T(context, args...);
+}
+
+/**
+ * Clone an object.
+ *
+ * @ingroup libbirch
+ *
+ * @tparam T Object type.
+ *
+ * @param context Current context.
+ * @param o The object.
+ *
+ * @return A raw pointer to the new object.
+ *
+ * @note Typically, one uses the clone_() virtual member function of an
+ * object, which calls this function, rather than calling this function
+ * directly, to ensure that T is the most derived type of the object.
+ */
+template<class T>
+T* clone_object(Label* context, const T* o) {
+  return make_object<T>(context, context, *o);
+}
+
+/**
+ * Make a pointer, with in-place object construction.
+ *
+ * @ingroup libbirch
+ *
+ * @tparam P Pointer type.
+ * @tparam Args Constructor parameter types.
+ *
+ * @param context Current context.
+ * @param args Constructor arguments.
+ *
+ * @return A pointer of the given type.
+ */
+template<class P, class ... Args>
+P make_pointer(Label* context, const Args& ... args) {
+  return P(context, make_object<typename P::value_type>(context, args...));
 }
 
 /**
  * Make a fiber.
  *
- * @tparam StateType The state type of the fiber.
+ * @tparam T Fiber state type.
  * @tparam Args Fiber state constructor parameter types.
  *
+ * @param context Current context.
  * @param args Fiber state constructor arguments.
  */
-template<class StateType, class ... Args>
-auto make_fiber(Args ... args) {
-  return Fiber<typename StateType::yield_type_>(make_object<StateType>(args...));
+template<class T, class ... Args>
+Fiber<typename T::yield_type_> make_fiber(Label* context,
+    const Args&... args) {
+  return Fiber<typename T::yield_type_>(context, Lazy<SharedPtr<T>>(context,
+      make_object<T>(context, args...)));
+}
+
+/**
+ * Make a tuple.
+ *
+ * @tparam Head First element type.
+ * @tparam Tail Remaining element types.
+ *
+ * @param head First element.
+ * @param tail Remaining elements.
+ */
+template<class Head, class... Tail>
+Tuple<Head,Tail...> make_tuple(const Head& head, const Tail&... tail) {
+  return Tuple<Head,Tail...>(head, tail...);
+}
+
+/**
+ * Make a tuple.
+ *
+ * @tparam Head First element type.
+ * @tparam Tail Remaining element types.
+ *
+ * @param head First element.
+ * @param tail Remaining elements.
+ */
+template<class Head, class... Tail>
+Tuple<Head,Tail...> make_tuple(Label* context, const Head& head,
+    const Tail&... tail) {
+  return Tuple<Head,Tail...>(context, head, tail...);
+}
+
+/**
+ * Make an assignable tuple.
+ *
+ * @tparam Head First element type.
+ * @tparam Tail Remaining element types.
+ *
+ * @param head First element.
+ * @param tail Remaining elements.
+ */
+template<class Head, class... Tail>
+Tie<Head&,Tail&...> tie(Head& head, Tail&... tail) {
+  return Tie<Head&,Tail&...>(head, tail...);
+}
+
+/**
+ * Make an assignable tuple.
+ *
+ * @tparam Head First element type.
+ * @tparam Tail Remaining element types.
+ *
+ * @param head First element.
+ * @param tail Remaining elements.
+ */
+template<class Head, class... Tail>
+Tie<Head&,Tail&...> tie(Label* context, Head& head, Tail&... tail) {
+  return Tie<Head&,Tail&...>(context, head, tail...);
+}
+
+/**
+ * Make a value.
+ *
+ * @tparam T Value type.
+ *
+ * @return An optional with a default-constructed value of the given type.
+ */
+template<class T, IS_VALUE(T)>
+Optional<T> make(Label* context) {
+  return Optional<T>(T());
+}
+
+/**
+ * Make an object.
+ *
+ * @tparam T Pointer type.
+ *
+ * @return An optional with a value of the given type if that type is
+ * a default-constructible class type, otherwise no value.
+ */
+template<class T, IS_DEFAULT_CONSTRUCTIBLE(T)>
+Optional<T> make(Label* context) {
+  return Optional<T>(make_pointer<T>(context));
+}
+
+/**
+ * Make an object.
+ *
+ * @tparam T Pointer type.
+ *
+ * @return An optional with a value of the given type if that type is
+ * a default-constructible class type, otherwise no value.
+ */
+template<class T, IS_NOT_DEFAULT_CONSTRUCTIBLE(T)>
+Optional<T> make(Label* context) {
+  return Optional<T>();
 }
 
 /**
  * Cast an object.
  */
 template<class To, class From>
-auto dynamic_pointer_cast(const Shared<From>& from) {
-  return Optional<Shared<To>>(std::move(from.template dynamic_pointer_cast<To>()));
+Optional<To> dynamic_pointer_cast(Label* context, const LazySharedPtr<From>& from) {
+  return Optional<To>(context, from.template dynamic_pointer_cast<To>(context));
 }
 
 /**
  * Cast an object optional.
  */
 template<class To, class From>
-auto dynamic_pointer_cast(const Optional<Shared<From>>& from) {
+Optional<To> dynamic_pointer_cast(Label* context, const Optional<LazySharedPtr<From>>& from) {
   if (from.query()) {
-    return dynamic_pointer_cast<To>(from.get());
+    return Optional<To>(context, from.get().template dynamic_pointer_cast<To>(context));
   } else {
-    return Optional<Shared<To>>();
+    return Optional<To>();
   }
 }
 
@@ -259,7 +444,7 @@ auto dynamic_pointer_cast(const Optional<Shared<From>>& from) {
  * @return An optional, with a value only if @p from is of type To.
  */
 template<class To, class From>
-auto check_cast(const From& from) {
+Optional<To> check_cast(const From& from) {
   return std::is_same<To,From>::value ? Optional<To>(from) : Optional<To>();
 }
 
@@ -269,7 +454,7 @@ auto check_cast(const From& from) {
  * @return An optional, with a value only if @p from has a value of type To.
  */
 template<class To, class From>
-auto check_cast(const Optional<From>& from) {
+Optional<To> check_cast(const Optional<From>& from) {
   if (from.query()) {
     return check_cast<To>(from.get());
   } else {

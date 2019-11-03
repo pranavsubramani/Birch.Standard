@@ -3,7 +3,7 @@
  */
 function rows(X:Object[_,_]) -> Integer64 {
   cpp{{
-  return X.length(0);
+  return X.rows();
   }}
 }
 
@@ -12,7 +12,7 @@ function rows(X:Object[_,_]) -> Integer64 {
  */
 function rows(X:Real[_,_]) -> Integer64 {
   cpp{{
-  return X.length(0);
+  return X.rows();
   }}
 }
 
@@ -21,7 +21,7 @@ function rows(X:Real[_,_]) -> Integer64 {
  */
 function rows(X:Integer[_,_]) -> Integer64 {
   cpp{{
-  return X.length(0);
+  return X.rows();
   }}
 }
 
@@ -30,7 +30,7 @@ function rows(X:Integer[_,_]) -> Integer64 {
  */
 function rows(X:Boolean[_,_]) -> Integer64 {
   cpp{{
-  return X.length(0);
+  return X.rows();
   }}
 }
 
@@ -39,7 +39,7 @@ function rows(X:Boolean[_,_]) -> Integer64 {
  */
 function columns(X:Object[_,_]) -> Integer64 {
   cpp{{
-  return X.length(1);
+  return X.cols();
   }}
 }
 
@@ -48,7 +48,7 @@ function columns(X:Object[_,_]) -> Integer64 {
  */
 function columns(X:Real[_,_]) -> Integer64 {
   cpp{{
-  return X.length(1);
+  return X.cols();
   }}
 }
 
@@ -57,7 +57,7 @@ function columns(X:Real[_,_]) -> Integer64 {
  */
 function columns(X:Integer[_,_]) -> Integer64 {
   cpp{{
-  return X.length(1);
+  return X.cols();
   }}
 }
 
@@ -66,7 +66,7 @@ function columns(X:Integer[_,_]) -> Integer64 {
  */
 function columns(X:Boolean[_,_]) -> Integer64 {
   cpp{{
-  return X.length(1);
+  return X.cols();
   }}
 }
 
@@ -80,9 +80,7 @@ function columns(X:Boolean[_,_]) -> Integer64 {
 function matrix(x:Real, rows:Integer, columns:Integer) -> Real[_,_] {
   Z:Real[rows,columns];
   cpp{{
-  auto first = Z.begin();
-  auto last = first + Z.size();
-  std::fill(first, last, x);
+  std::fill(Z.begin(), Z.end(), x);
   }}
   return Z;
 }
@@ -97,9 +95,7 @@ function matrix(x:Real, rows:Integer, columns:Integer) -> Real[_,_] {
 function matrix(x:Integer, rows:Integer, columns:Integer) -> Integer[_,_] {
   Z:Integer[rows,columns];
   cpp{{
-  auto first = Z.begin();
-  auto last = first + Z.size();
-  std::fill(first, last, x);
+  std::fill(Z.begin(), Z.end(), x);
   }}
   return Z;
 }
@@ -114,9 +110,7 @@ function matrix(x:Integer, rows:Integer, columns:Integer) -> Integer[_,_] {
 function matrix(x:Boolean, rows:Integer, columns:Integer) -> Boolean[_,_] {
   Z:Boolean[rows,columns];
   cpp{{
-  auto first = Z.begin();
-  auto last = first + Z.size();
-  std::fill(first, last, x);
+  std::fill(Z.begin(), Z.end(), x);
   }}
   return Z;
 }
@@ -159,48 +153,6 @@ function diagonal(x:Boolean, length:Integer) -> Boolean[_,_] {
   Z:Boolean[_,_] <- matrix(false, length, length);
   for (i:Integer in 1..length) {
     Z[i,i] <- x;
-  }
-  return Z;
-}
-
-/**
- * Create diagonal matrix, filling the diagonal with a given vector.
- *
- * - x: The vector.
- */
-function diagonal(x:Real[_]) -> Real[_,_] {
-  auto n <- length(x);
-  auto Z <- matrix(0.0, n, n);
-  for (i:Integer in 1..n) {
-    Z[i,i] <- x[i];
-  }
-  return Z;
-}
-
-/**
- * Create diagonal matrix, filling the diagonal with a given vector.
- *
- * - x: The vector.
- */
-function diagonal(x:Integer[_]) -> Integer[_,_] {
-  auto n <- length(x);
-  auto Z <- matrix(0, n, n);
-  for (i:Integer in 1..n) {
-    Z[i,i] <- x[i];
-  }
-  return Z;
-}
-
-/**
- * Create diagonal matrix, filling the diagonal with a given vector.
- *
- * - x: The vector.
- */
-function diagonal(x:Boolean[_]) -> Boolean[_,_] {
-  auto n <- length(x);
-  auto Z <- matrix(false, n, n);
-  for (i:Integer in 1..n) {
-    Z[i,i] <- x[i];
   }
   return Z;
 }
@@ -293,4 +245,94 @@ function column(x:Boolean[_]) -> Boolean[_,_] {
   y:Boolean[length(x),1];
   y[1..rows(y),1] <- x;
   return y;
+}
+
+/**
+ * Convert matrix to String.
+ */
+function String(X:Real[_,_]) -> String {
+  result:String;
+  cpp{{
+  std::stringstream buf;
+  }}
+  for auto i in 1..rows(X) {
+    cpp{{
+    if (i > 1) {
+      buf << '\n';
+    }
+    }}
+    for auto j in 1..columns(X) {
+      auto value <- String(X[i,j]);
+      cpp{{
+      if (j > 1) {
+        buf << ' ';
+      }
+      buf << value;
+      }}
+    }
+  }
+  cpp{{
+  result = buf.str();
+  }}
+  return result;
+}
+
+/**
+ * Convert matrix to String.
+ */
+function String(X:Integer[_,_]) -> String {
+  result:String;
+  cpp{{
+  std::stringstream buf;
+  }}
+  for auto i in 1..rows(X) {
+    cpp{{
+    if (i > 1) {
+      buf << '\n';
+    }
+    }}
+    for auto j in 1..columns(X) {
+      auto value <- String(X[i,j]);
+      cpp{{
+      if (j > 1) {
+        buf << ' ';
+      }
+      buf << value;
+      }}
+    }
+  }
+  cpp{{
+  result = buf.str();
+  }}
+  return result;
+}
+
+/**
+ * Convert matrix to String.
+ */
+function String(X:Boolean[_,_]) -> String {
+  result:String;
+  cpp{{
+  std::stringstream buf;
+  }}
+  for auto i in 1..rows(X) {
+    cpp{{
+    if (i > 1) {
+      buf << '\n';
+    }
+    }}
+    for auto j in 1..columns(X) {
+      auto value <- String(X[i,j]);
+      cpp{{
+      if (j > 1) {
+        buf << ' ';
+      }
+      buf << value;
+      }}
+    }
+  }
+  cpp{{
+  result = buf.str();
+  }}
+  return result;
 }

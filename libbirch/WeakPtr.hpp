@@ -24,7 +24,6 @@ class WeakPtr {
   template<class U> friend class InitPtr;
 public:
   using value_type = T;
-  template<class U> using cast_type = WeakPtr<U>;
 
   /**
    * Constructor.
@@ -106,15 +105,13 @@ public:
    * Copy assignment.
    */
   WeakPtr<T>& operator=(const WeakPtr<T>& o) {
-    if (ptr != o.ptr) {
-      if (o.ptr) {
-        o.ptr->incWeak();
-      }
-      auto old = ptr;
-      ptr = o.ptr;
-      if (old) {
-        old->decWeak();
-      }
+    if (o.ptr) {
+      o.ptr->incWeak();
+    }
+    auto old = ptr;
+    ptr = o.ptr;
+    if (old) {
+      old->decWeak();
     }
     return *this;
   }
@@ -124,15 +121,13 @@ public:
    */
   template<class U>
   WeakPtr<T>& operator=(const WeakPtr<U>& o) {
-    if (ptr != o.ptr) {
-      if (o.ptr) {
-        o.ptr->incWeak();
-      }
-      auto old = ptr;
-      ptr = o.ptr;
-      if (old) {
-        old->decWeak();
-      }
+    if (o.ptr) {
+      o.ptr->incWeak();
+    }
+    auto old = ptr;
+    ptr = o.ptr;
+    if (old) {
+      old->decWeak();
     }
     return *this;
   }
@@ -141,13 +136,11 @@ public:
    * Move assignment.
    */
   WeakPtr<T>& operator=(WeakPtr<T> && o) {
-    if (ptr != o.ptr) {
-      auto old = ptr;
-      ptr = o.ptr;
-      o.ptr = nullptr;
-      if (old) {
-        old->decWeak();
-      }
+    auto old = ptr;
+    ptr = o.ptr;
+    o.ptr = nullptr;
+    if (old) {
+      old->decWeak();
     }
     return *this;
   }
@@ -157,13 +150,11 @@ public:
    */
   template<class U>
   WeakPtr<T>& operator=(WeakPtr<U> && o) {
-    if (ptr != o.ptr) {
-      auto old = ptr;
-      ptr = o.ptr;
-      o.ptr = nullptr;
-      if (old) {
-        old->decWeak();
-      }
+    auto old = ptr;
+    ptr = o.ptr;
+    o.ptr = nullptr;
+    if (old) {
+      old->decWeak();
     }
     return *this;
   }
@@ -190,14 +181,12 @@ public:
   void replace(T* ptr) {
     assert(!ptr || ptr->numWeak() > 0);
     auto old = this->ptr;
-    if (ptr != old) {
-      if (ptr) {
-        ptr->incWeak();
-      }
-      this->ptr = ptr;
-      if (old) {
-        old->decWeak();
-      }
+    if (ptr) {
+      ptr->incWeak();
+    }
+    this->ptr = ptr;
+    if (old) {
+      old->decWeak();
     }
   }
 
@@ -266,6 +255,26 @@ public:
    */
   operator bool() const {
     return ptr != nullptr;
+  }
+
+  /**
+   * Dynamic cast.
+   */
+  template<class U>
+  auto dynamic_pointer_cast() const {
+    U cast;
+    cast.replace(dynamic_cast<typename U::value_type*>(ptr));
+    return cast;
+  }
+
+  /**
+   * Static cast.
+   */
+  template<class U>
+  auto static_pointer_cast() const {
+    U cast;
+    cast.replace(static_cast<typename U::value_type*>(ptr));
+    return cast;
   }
 
 private:

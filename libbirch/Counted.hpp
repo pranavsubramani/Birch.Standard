@@ -6,6 +6,7 @@
 #include "libbirch/external.hpp"
 #include "libbirch/memory.hpp"
 #include "libbirch/class.hpp"
+#include "libbirch/Atomic.hpp"
 
 namespace libbirch {
 /**
@@ -18,71 +19,56 @@ namespace libbirch {
  * @ingroup libbirch
  */
 class Counted {
-protected:
+public:
   /**
    * Constructor.
    */
-  Counted();
+  Counted() :
+      sharedCount(0u),
+      weakCount(1u),
+      memoCount(1u) {
+    // no need to set size or tid, handled by operator new
+  }
 
   /**
    * Copy constructor.
    */
-  Counted(const Counted& o);
-
-  /**
-   * Destructor.
-   */
-  virtual ~Counted();
+  Counted(const Counted& o) : Counted() {
+    //
+  }
 
   /**
    * Assignment operator.
    */
-  Counted& operator=(const Counted&) = delete;
-
-public:
-  /**
-   * Create an object,
-   */
-  template<class... Args>
-  static Counted* create_(Args... args) {
-    return emplace_(allocate<sizeof(Counted)>(), args...);
+  Counted& operator=(const Counted&) {
+    return *this;
   }
 
   /**
-   * Create an object in previously-allocated memory.
+   * Destructor.
    */
-  template<class... Args>
-  static Counted* emplace_(void* ptr, Args... args) {
-    auto o = new (ptr) Counted();
-    o->size = sizeof(Counted);
-    return o;
+  virtual ~Counted() {
+    assert(sharedCount.load() == 0u);
   }
 
   /**
-   * Clone the object.
+   * New operator.
    */
-  virtual Counted* clone_() const {
-    return emplace_(allocate<sizeof(Counted)>(), *this);
+  void* operator new(std::size_t size) {
+    auto ptr = (Counted*)allocate(size);
+    ptr->size = (unsigned)size;
+    ptr->tid = get_thread_num();
+    return ptr;
   }
 
   /**
-   * Clone the object into previous allocation.
+   * Delete operator.
    */
-  virtual Counted* clone_(void* ptr) const {
-    return emplace_(ptr, *this);
+  void operator delete(void* ptr) {
+    auto counted = (Counted*)ptr;
+    counted->destroy();
+    counted->deallocate();
   }
-
-  /**
-   * Destroy the object.
-   */
-  virtual void destroy_() {
-    this->~Counted();
-  }
-
-  /**
-   * Deallocate the object.
-   */
-  void deallocate();
 
   /**
    * Get the size, in bytes, of the object.
@@ -136,7 +122,6 @@ public:
    */
   unsigned numWeak() const;
 
-  #if ENABLE_LAZY_DEEP_CLONE
   /**
    * Increment the memo count (implies an increment of the weak count also).
    */
@@ -160,7 +145,6 @@ public:
    * so the object is not considered reachable.
    */
   bool isReachable() const;
-  #endif
 
   /**
    * Name of the class.
@@ -170,6 +154,24 @@ public:
   }
 
 protected:
+  /**
+   * Destroy, but do not deallocate, the object.
+   */
+  void destroy() {
+    assert(sharedCount.load() == 0u);
+    this->~Counted();
+  }
+
+  /**
+   * Deallocate the object. It should have previously been destroyed.
+   */
+  void deallocate() {
+    assert(sharedCount.load() == 0u);
+    assert(weakCount.load() == 0u);
+    assert(memoCount.load() == 0u);
+    libbirch::deallocate(this, size, tid);
+  }
+
   /**
    * Shared count.
    */
@@ -182,14 +184,12 @@ protected:
    */
   Atomic<unsigned> weakCount;
 
-  #if ENABLE_LAZY_DEEP_CLONE
   /**
    * Memo count. This is one plus the number of times that the object occurs
    * as a key in a memo. The plus one is a self-reference that is relased
    * when the weak count reaches zero.
    */
   Atomic<unsigned> memoCount;
-  #endif
 
   /**
    * Size of the object. This is set immediately after construction. A value
@@ -205,46 +205,11 @@ protected:
    * allocation to the correct pool after use, even when returned by a
    * different thread.
    */
-  unsigned tid;
+  int tid;
 };
 }
 
 #include "libbirch/thread.hpp"
-
-inline libbirch::Counted::Counted() :
-    sharedCount(0u),
-    weakCount(1u),
-    #if ENABLE_LAZY_DEEP_CLONE
-    memoCount(1u),
-    #endif
-    size(0u),
-    tid(libbirch::tid) {
-  //
-}
-
-inline libbirch::Counted::Counted(const Counted& o) :
-    sharedCount(0u),
-    weakCount(1u),
-    #if ENABLE_LAZY_DEEP_CLONE
-    memoCount(1u),
-    #endif
-    size(o.size),
-    tid(libbirch::tid) {
-  //
-}
-
-inline libbirch::Counted::~Counted() {
-  assert(sharedCount.load() == 0u);
-}
-
-inline void libbirch::Counted::deallocate() {
-  assert(sharedCount.load() == 0u);
-  assert(weakCount.load() == 0u);
-  #if ENABLE_LAZY_DEEP_CLONE
-  assert(memoCount.load() == 0u);
-  #endif
-  libbirch::deallocate(this, size, tid);
-}
 
 inline unsigned libbirch::Counted::getSize() const {
   return size;
@@ -262,9 +227,8 @@ inline void libbirch::Counted::incShared() {
 
 inline void libbirch::Counted::decShared() {
   assert(sharedCount.load() > 0u);
-  if (--sharedCount == 0u && size > 0u) {
-    // ^ size == 0u during construction, never destroy in that case
-    destroy_();
+  if (--sharedCount == 0u) {
+    destroy();
     decWeak();  // release weak self-reference
   }
 }
@@ -276,9 +240,8 @@ inline void libbirch::Counted::doubleIncShared() {
 
 inline void libbirch::Counted::doubleDecShared() {
   assert(sharedCount.load() > 0u);
-  if ((sharedCount -= 2u) == 0u && size > 0u) {
-    // ^ size == 0u during construction, never destroy in that case
-    destroy_();
+  if ((sharedCount -= 2u) == 0u) {
+    destroy();
     decWeak();  // release weak self-reference
   }
 }
@@ -296,11 +259,7 @@ inline void libbirch::Counted::decWeak() {
   assert(weakCount.load() > 0u);
   if (--weakCount == 0u) {
     assert(sharedCount.load() == 0u);
-    #if ENABLE_LAZY_DEEP_CLONE
     decMemo();  // release memo self-reference
-    #else
-    deallocate();
-    #endif
   }
 }
 
@@ -308,7 +267,6 @@ inline unsigned libbirch::Counted::numWeak() const {
   return weakCount.load();
 }
 
-#if ENABLE_LAZY_DEEP_CLONE
 inline void libbirch::Counted::incMemo() {
   memoCount.increment();
 }
@@ -329,4 +287,3 @@ inline unsigned libbirch::Counted::numMemo() const {
 inline bool libbirch::Counted::isReachable() const {
   return numWeak() > 0u;
 }
-#endif

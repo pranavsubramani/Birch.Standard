@@ -3,7 +3,7 @@
  *
  * - Value: Value type.
  */
-class Expression<Value> {  
+abstract class Expression<Value> {  
   /**
    * Value conversion.
    */
@@ -14,9 +14,7 @@ class Expression<Value> {
   /**
    * Value evaluation.
    */
-  function value() -> Value {
-    assert false;
-  }
+  abstract function value() -> Value;
   
   /*
    * Boxed value evaluation.
@@ -39,34 +37,7 @@ class Expression<Value> {
   function getDelay() -> Delay? {
     return nil;
   }
-  
-  /*
-   * Attempt to graft this expression onto the delayed sampling graph.
-   *
-   * Return: The node if successful, nil if not.
-   */
-  function graftGaussian() -> DelayGaussian? {
-    return nil;
-  }
-  
-  /*
-   * Attempt to graft this expression onto the delayed sampling graph.
-   *
-   * Return: The node if successful, nil if not.
-   */
-  function graftLinearGaussian() -> TransformLinearGaussian? {
-    return nil;
-  }
-  
-  /*
-   * Attempt to graft this expression onto the delayed sampling graph.
-   *
-   * Return: The node if successful, nil if not.
-   */
-  function graftRidge() -> DelayRidge? {
-    return nil;
-  }
-  
+
   /*
    * Attempt to graft this expression onto the delayed sampling graph.
    *
@@ -75,64 +46,7 @@ class Expression<Value> {
   function graftBeta() -> DelayBeta? {
     return nil;
   }
-  
-  /*
-   * Attempt to graft this expression onto the delayed sampling graph.
-   *
-   * Return: The node if successful, nil if not.
-   */
-  function graftGamma() -> DelayGamma? {
-    return nil;
-  }
 
-  /*
-   * Attempt to graft this expression onto the delayed sampling graph.
-   *
-   * Return: The node if successful, nil if not.
-   */
-  function graftScaledGamma() ->  TransformScaledGamma? {
-    return nil;
-  }
-  
-  /*
-   * Attempt to graft this expression onto the delayed sampling graph.
-   *
-   * Return: The node if successful, nil if not.
-   */
-  function graftInverseGamma() -> DelayInverseGamma? {
-    return nil;
-  } 
-  
-  /*
-   * Attempt to graft this expression onto the delayed sampling graph.
-   *
-   * Return: The node if successful, nil if not.
-   */
-  function graftScaledInverseGamma() -> 
-      TransformScaledInverseGamma? {
-    return nil;
-  }
-  
-  /*
-   * Attempt to graft this expression onto the delayed sampling graph.
-   *
-   * Return: The node if successful, nil if not.
-   */
-  function graftNormalInverseGamma() ->
-      DelayNormalInverseGamma? {
-    return nil;
-  }
-
-  /*
-   * Attempt to graft this expression onto the delayed sampling graph.
-   *
-   * Return: The node if successful, nil if not.
-   */
-  function graftLinearNormalInverseGamma() ->
-      TransformLinearNormalInverseGamma? {
-    return nil;
-  }
-  
   /*
    * Attempt to graft this expression onto the delayed sampling graph.
    *
@@ -150,6 +64,98 @@ class Expression<Value> {
   function graftRestaurant() -> DelayRestaurant? {
     return nil;
   }
+  
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftGamma() -> DelayGamma? {
+    return nil;
+  }
+
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftScaledGamma() ->  TransformLinear<DelayGamma>? {
+    return nil;
+  }
+  
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftInverseGamma() -> DelayInverseGamma? {
+    return nil;
+  }
+  
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftScaledInverseGamma() -> TransformLinear<DelayInverseGamma>? {
+    return nil;
+  }
+
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftIndependentInverseGamma() -> DelayIndependentInverseGamma? {
+    return nil;
+  }
+
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftInverseWishart() -> DelayInverseWishart? {
+    return nil;
+  }
+
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftGaussian() -> DelayGaussian? {
+    return nil;
+  }
+  
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftLinearGaussian() -> TransformLinear<DelayGaussian>? {
+    return nil;
+  }
+  
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftNormalInverseGamma() -> DelayNormalInverseGamma? {
+    return nil;
+  }
+
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftLinearNormalInverseGamma() ->
+      TransformLinear<DelayNormalInverseGamma>? {
+    return nil;
+  }
+
 
   /*
    * Attempt to graft this expression onto the delayed sampling graph.
@@ -165,28 +171,8 @@ class Expression<Value> {
    *
    * Return: The node if successful, nil if not.
    */
-  function graftMultivariateLinearGaussian() ->
-      TransformMultivariateLinearGaussian? {
-    return nil;
-  }
-
-  /*
-   * Attempt to graft this expression onto the delayed sampling graph.
-   *
-   * Return: The node if successful, nil if not.
-   */
-  function graftMultivariateDotGaussian() ->
-      TransformMultivariateDotGaussian? {
-    return nil;
-  }
-
-  /*
-   * Attempt to graft this expression onto the delayed sampling graph.
-   *
-   * Return: The node if successful, nil if not.
-   */
-  function graftMultivariateScaledInverseGamma() ->
-      TransformMultivariateScaledInverseGamma? {
+  function graftLinearMultivariateGaussian() ->
+      TransformLinearMultivariate<DelayMultivariateGaussian>? {
     return nil;
   }
 
@@ -205,8 +191,8 @@ class Expression<Value> {
    *
    * Return: The node if successful, nil if not.
    */
-  function graftMultivariateLinearNormalInverseGamma() ->
-      TransformMultivariateLinearNormalInverseGamma? {
+  function graftLinearMultivariateNormalInverseGamma() ->
+      TransformLinearMultivariate<DelayMultivariateNormalInverseGamma>? {
     return nil;
   }
 
@@ -215,8 +201,57 @@ class Expression<Value> {
    *
    * Return: The node if successful, nil if not.
    */
-  function graftMultivariateDotNormalInverseGamma() ->
-      TransformMultivariateDotNormalInverseGamma? {
+  function graftMatrixGaussian() -> DelayMatrixGaussian? {
+    return nil;
+  }
+
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftLinearMatrixGaussian() ->
+      TransformLinearMatrix<DelayMatrixGaussian>? {
+    return nil;
+  }
+
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftMatrixNormalInverseGamma() ->
+      DelayMatrixNormalInverseGamma? {
+    return nil;
+  }
+
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftLinearMatrixNormalInverseGamma() ->
+      TransformLinearMatrix<DelayMatrixNormalInverseGamma>? {
+    return nil;
+  }
+
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftMatrixNormalInverseWishart() ->
+      DelayMatrixNormalInverseWishart? {
+    return nil;
+  }
+
+  /*
+   * Attempt to graft this expression onto the delayed sampling graph.
+   *
+   * Return: The node if successful, nil if not.
+   */
+  function graftLinearMatrixNormalInverseWishart() ->
+      TransformLinearMatrix<DelayMatrixNormalInverseWishart>? {
     return nil;
   }
 

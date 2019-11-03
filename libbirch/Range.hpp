@@ -8,7 +8,7 @@
 
 namespace libbirch {
 /**
- * Range.
+ * Range, used within a slice to indicate a range of elements of a dimension.
  *
  * @ingroup libbirch
  *
@@ -70,7 +70,7 @@ struct Range: public Offset<offset_value>, public Length<length_value> {
   }
 
   /**
-   * Used to count the number of ranges in a view.
+   * Used to count the number of ranges in a slice.
    */
   static constexpr int rangeCount() {
     return 1;

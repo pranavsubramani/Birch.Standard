@@ -17,8 +17,8 @@ final class Add<Left,Right,Value>(left:Expression<Left>, right:Expression<Right>
     return left.value() + right.value();
   }
 
-  function graftLinearGaussian() -> TransformLinearGaussian? {
-    y:TransformLinearGaussian?;
+  function graftLinearGaussian() -> TransformLinear<DelayGaussian>? {
+    y:TransformLinear<DelayGaussian>?;
     z:DelayGaussian?;
     
     if (y <- left.graftLinearGaussian())? {
@@ -26,15 +26,16 @@ final class Add<Left,Right,Value>(left:Expression<Left>, right:Expression<Right>
     } else if (y <- right.graftLinearGaussian())? {
       y!.add(left.value());
     } else if (z <- left.graftGaussian())? {
-      y <- TransformLinearGaussian(1.0, z!, right.value());
+      y <- TransformLinear<DelayGaussian>(1.0, z!, right.value());
     } else if (z <- right.graftGaussian())? {
-      y <- TransformLinearGaussian(1.0, z!, left.value());
+      y <- TransformLinear<DelayGaussian>(1.0, z!, left.value());
     }
     return y;
   }
   
-  function graftLinearNormalInverseGamma() -> TransformLinearNormalInverseGamma? {
-    y:TransformLinearNormalInverseGamma?;
+  function graftLinearNormalInverseGamma() ->
+      TransformLinear<DelayNormalInverseGamma>? {
+    y:TransformLinear<DelayNormalInverseGamma>?;
     z:DelayNormalInverseGamma?;
 
     if (y <- left.graftLinearNormalInverseGamma())? {
@@ -42,35 +43,13 @@ final class Add<Left,Right,Value>(left:Expression<Left>, right:Expression<Right>
     } else if (y <- right.graftLinearNormalInverseGamma())? {
       y!.add(left.value());
     } else if (z <- left.graftNormalInverseGamma())? {
-      y <- TransformLinearNormalInverseGamma(1.0, z!, right.value());
+      y <- TransformLinear<DelayNormalInverseGamma>(1.0, z!, right.value());
     } else if (z <- right.graftNormalInverseGamma())? {
-      y <- TransformLinearNormalInverseGamma(1.0, z!, left.value());
+      y <- TransformLinear<DelayNormalInverseGamma>(1.0, z!, left.value());
     }
     return y;
   }
-
-  function graftMultivariateDotGaussian() -> TransformMultivariateDotGaussian? {
-    y:TransformMultivariateDotGaussian?;
-    
-    if (y <- left.graftMultivariateDotGaussian())? {
-      y!.add(right.value());
-    } else if (y <- right.graftMultivariateDotGaussian())? {
-      y!.add(left.value());
-    }
-    return y;
-  }
-
-  function graftMultivariateDotNormalInverseGamma() -> TransformMultivariateDotNormalInverseGamma? {
-    y:TransformMultivariateDotNormalInverseGamma?;
-
-    if (y <- left.graftMultivariateDotNormalInverseGamma())? {
-      y!.add(right.value());
-    } else if (y <- right.graftMultivariateDotNormalInverseGamma())? {
-      y!.add(left.value());
-    }
-    return y;
-  }
-
+  
   function graftDiscrete() -> DelayDiscrete? {
     y:DelayDiscrete? <- graftBoundedDiscrete();
     if !y? {

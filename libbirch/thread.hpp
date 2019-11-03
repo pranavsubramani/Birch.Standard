@@ -4,23 +4,40 @@
 #pragma once
 
 #include "libbirch/external.hpp"
+#include "libbirch/EntryExitLock.hpp"
 
 namespace libbirch {
-/**
- * Number of threads.
- */
+class Label;
+
+inline int get_max_threads() {
 #ifdef _OPENMP
-static const unsigned nthreads = omp_get_max_threads();
+  return omp_get_max_threads();
 #else
-static const unsigned nthreads = 1u;
+  return 1;
 #endif
+}
+
+inline int get_thread_num() {
+#ifdef _OPENMP
+  return omp_get_thread_num();
+#else
+  return 0;
+#endif
+}
 
 /**
- * Thread id.
+ * The root context.
  */
-#ifdef _OPENMP
-static thread_local const unsigned tid = omp_get_thread_num();
-#else
-static const unsigned tid = 0u;
-#endif
+extern Label* rootContext;
+
+/**
+ * Global freeze lock.
+ */
+extern EntryExitLock freezeLock;
+
+/**
+ * Global finish lock.
+ */
+extern EntryExitLock finishLock;
+
 }

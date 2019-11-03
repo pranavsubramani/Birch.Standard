@@ -24,7 +24,6 @@ class SharedPtr {
   template<class U> friend class InitPtr;
 public:
   using value_type = T;
-  template<class U> using cast_type = SharedPtr<U>;
 
   /**
    * Constructor. This is intended for use immediately after construction of
@@ -111,15 +110,13 @@ public:
    * Copy assignment.
    */
   SharedPtr<T>& operator=(const SharedPtr<T>& o) {
-    if (ptr != o.ptr) {
-      if (o.ptr) {
-        o.ptr->incShared();
-      }
-      auto old = ptr;
-      ptr = o.ptr;
-      if (old) {
-        old->decShared();
-      }
+    if (o.ptr) {
+      o.ptr->incShared();
+    }
+    auto old = ptr;
+    ptr = o.ptr;
+    if (old) {
+      old->decShared();
     }
     return *this;
   }
@@ -129,15 +126,13 @@ public:
    */
   template<class U>
   SharedPtr<T>& operator=(const SharedPtr<U>& o) {
-    if (ptr != o.ptr) {
-      if (o.ptr) {
-        o.ptr->incShared();
-      }
-      auto old = ptr;
-      ptr = o.ptr;
-      if (old) {
-        old->decShared();
-      }
+    if (o.ptr) {
+      o.ptr->incShared();
+    }
+    auto old = ptr;
+    ptr = o.ptr;
+    if (old) {
+      old->decShared();
     }
     return *this;
   }
@@ -146,13 +141,11 @@ public:
    * Move assignment.
    */
   SharedPtr<T>& operator=(SharedPtr<T> && o) {
-    if (ptr != o.ptr) {
-      auto old = ptr;
-      ptr = o.ptr;
-      o.ptr = nullptr;
-      if (old) {
-        old->decShared();
-      }
+    auto old = ptr;
+    ptr = o.ptr;
+    o.ptr = nullptr;
+    if (old) {
+      old->decShared();
     }
     return *this;
   }
@@ -162,13 +155,11 @@ public:
    */
   template<class U>
   SharedPtr<T>& operator=(SharedPtr<U> && o) {
-    if (ptr != o.ptr) {
-      auto old = ptr;
-      ptr = o.ptr;
-      o.ptr = nullptr;
-      if (old) {
-        old->decShared();
-      }
+    auto old = ptr;
+    ptr = o.ptr;
+    o.ptr = nullptr;
+    if (old) {
+      old->decShared();
     }
     return *this;
   }
@@ -195,14 +186,12 @@ public:
   void replace(T* ptr) {
     //assert(!ptr || ptr->numShared() > 0);
     auto old = this->ptr;
-    if (ptr != old) {
-      if (ptr) {
-        ptr->incShared();
-      }
-      this->ptr = ptr;
-      if (old) {
-        old->decShared();
-      }
+    if (ptr) {
+      ptr->incShared();
+    }
+    this->ptr = ptr;
+    if (old) {
+      old->decShared();
     }
   }
 
@@ -271,6 +260,26 @@ public:
    */
   operator bool() const {
     return ptr != nullptr;
+  }
+
+  /**
+   * Dynamic cast.
+   */
+  template<class U>
+  auto dynamic_pointer_cast() const {
+    U cast;
+    cast.replace(dynamic_cast<typename U::value_type*>(ptr));
+    return cast;
+  }
+
+  /**
+   * Static cast.
+   */
+  template<class U>
+  auto static_pointer_cast() const {
+    U cast;
+    cast.replace(static_cast<typename U::value_type*>(ptr));
+    return cast;
   }
 
 private:

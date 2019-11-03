@@ -1,7 +1,7 @@
 /**
  * Sampler for a ForwardModel archetype.
  */
-class ForwardSampler < Sampler {
+abstract class ForwardSampler < Sampler {
   /**
    * The archetype.
    */
@@ -11,7 +11,7 @@ class ForwardSampler < Sampler {
    * Number of steps.
    */
   T:Integer <- 1;
-  
+    
   function setArchetype(archetype:Model) {
     this.archetype <-? ForwardModel?(archetype);
     if !this.archetype? {

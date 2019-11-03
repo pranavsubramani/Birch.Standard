@@ -17,7 +17,7 @@ function cdf_binomial(x:Integer, n:Integer, ρ:Real) -> Real {
     return 1.0;
   } else {
     cpp{{
-    //return boost::math::cdf(boost::math::binomial_distribution<>(n, ρ), x);
+    return boost::math::cdf(boost::math::binomial_distribution<>(n, ρ), x);
     }}
   } 
 }
@@ -39,7 +39,7 @@ function cdf_negative_binomial(x:Integer, k:Integer, ρ:Real) -> Real {
     return 0.0;
   } else {
     cpp{{
-    //return boost::math::cdf(boost::math::negative_binomial_distribution<>(k, ρ), x);
+    return boost::math::cdf(boost::math::negative_binomial_distribution<>(k, ρ), x);
     }}
   }
 }
@@ -59,7 +59,7 @@ function cdf_poisson(x:Integer, λ:Real) -> Real {
     return 0.0;
   } else {
     cpp{{
-    //return boost::math::cdf(boost::math::poisson_distribution<>(λ), x);
+    return boost::math::cdf(boost::math::poisson_distribution<>(λ), x);
     }}
   }
 }
@@ -155,7 +155,7 @@ function cdf_exponential(x:Real, λ:Real) -> Real {
     return 0.0;
   } else {
     cpp{{
-    //return boost::math::cdf(boost::math::exponential_distribution<>(λ), x);
+    return boost::math::cdf(boost::math::exponential_distribution<>(λ), x);
     }}
   }
 }
@@ -173,7 +173,7 @@ function cdf_weibull(x:Real, k:Real, λ:Real) -> Real {
   assert 0.0 < k;
   assert 0.0 < λ;
   cpp{{
-  //return boost::math::cdf(boost::math::weibull_distribution<>(k, λ), x);
+  return boost::math::cdf(boost::math::weibull_distribution<>(k, λ), x);
   }}
 }
 
@@ -189,29 +189,8 @@ function cdf_weibull(x:Real, k:Real, λ:Real) -> Real {
 function cdf_gaussian(x:Real, μ:Real, σ2:Real) -> Real {
   assert 0.0 < σ2;
   cpp{{
-  //return boost::math::cdf(boost::math::normal_distribution<>(μ, ::sqrt(σ2)), x);
+  return boost::math::cdf(boost::math::normal_distribution<>(μ, ::sqrt(σ2)), x);
   }}
-}
-
-/**
- * CDF of a log-Gaussian variate.
- *
- * - x: The variate.
- * - μ: Mean.
- * - σ2: Variance.
- *
- * Return: the cumulative probability.
- */
-function cdf_log_gaussian(x:Real, μ:Real, σ2:Real) -> Real {
-  assert 0.0 < σ2;
-  
-  if x <= 0.0 {
-    return 0.0;
-  } else {
-    cpp{{
-    //return boost::math::cdf(boost::math::lognormal_distribution<>(μ, ::sqrt(σ2)), x);
-    }}
-  }
 }
 
 /**
@@ -225,7 +204,7 @@ function cdf_log_gaussian(x:Real, μ:Real, σ2:Real) -> Real {
 function cdf_student_t(x:Real, ν:Real) -> Real {
   assert 0.0 < ν;
   cpp{{
-  //return boost::math::cdf(boost::math::students_t_distribution<>(ν), x);
+  return boost::math::cdf(boost::math::students_t_distribution<>(ν), x);
   }}
 }
 
@@ -241,7 +220,7 @@ function cdf_student_t(x:Real, ν:Real) -> Real {
  */
 function cdf_student_t(x:Real, ν:Real, μ:Real, σ2:Real) -> Real {
   assert 0.0 < σ2;
-  //return cdf_student_t((x - μ)/sqrt(σ2), ν);
+  return cdf_student_t((x - μ)/sqrt(σ2), ν);
 }
 
 /**
@@ -263,9 +242,24 @@ function cdf_beta(x:Real, α:Real, β:Real) -> Real {
     return 1.0;
   } else {
     cpp{{
-    //return boost::math::cdf(boost::math::beta_distribution<>(α, β), x);
+    return boost::math::cdf(boost::math::beta_distribution<>(α, β), x);
     }}
   }
+}
+
+/**
+ * CDF of $\chi^2$ variate.
+ *
+ * - x: The variate.
+ * - ν: Degrees of freedom.
+ *
+ * Return: the cumulative probability.
+ */
+function cdf_chi_squared(x:Real, ν:Real) -> Real {
+  assert 0.0 < ν;
+  cpp{{
+  return boost::math::cdf(boost::math::chi_squared_distribution<>(ν), x);
+  }}
 }
 
 /**
@@ -285,7 +279,7 @@ function cdf_gamma(x:Real, k:Real, θ:Real) -> Real {
     return 0.0;
   } else {
     cpp{{
-    //return boost::math::cdf(boost::math::gamma_distribution<>(k, θ), x);
+    return boost::math::cdf(boost::math::gamma_distribution<>(k, θ), x);
     }}
   }
 }
@@ -307,7 +301,7 @@ function cdf_inverse_gamma(x:Real, α:Real, β:Real) -> Real {
     return 0.0;
   } else {
     cpp{{
-    //return boost::math::cdf(boost::math::inverse_gamma_distribution<>(α, β), x);
+    return boost::math::cdf(boost::math::inverse_gamma_distribution<>(α, β), x);
     }}
   }
 }
@@ -380,7 +374,7 @@ function cdf_lomax(x:Real, λ:Real, α:Real) -> Real {
     return 0.0;
   } else {
     cpp{{
-    //return boost::math::cdf(boost::math::pareto_distribution<>(λ, α), x + λ);
+    return boost::math::cdf(boost::math::pareto_distribution<>(λ, α), x + λ);
     }}
   }
 }
@@ -455,23 +449,4 @@ function cdf_normal_inverse_gamma_gaussian(x:Real, μ:Real, a2:Real,
 function cdf_linear_normal_inverse_gamma_gaussian(x:Real, a:Real,
     μ:Real, c:Real, a2:Real, α:Real, β:Real) -> Real {
   return cdf_student_t(x, 2.0*α, a*μ + c, (β/α)*(1.0 + a*a*a2));
-}
-
-/**
- * CDF of a Gaussian variate with a multivariate normal inverse-gamma prior
- * with dot transformation.
- *
- * - x: The variate.
- * - a: Scale.
- * - μ: Mean.
- * - c: Offset.
- * - Λ: Precision.
- * - α: Shape of the inverse-gamma.
- * - β: Scale of the inverse-gamma.
- *
- * Return: the probability density.
- */
-function cdf_multivariate_dot_normal_inverse_gamma_gaussian(x:Real,
-    a:Real[_], μ:Real[_], c:Real, Λ:LLT, α:Real, β:Real) -> Real {
-  return cdf_student_t(x, 2.0*α, dot(a, μ) + c,(β/α)*(1.0 + dot(a, solve(Λ, a))));
 }

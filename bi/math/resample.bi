@@ -12,7 +12,15 @@ function log_sum_exp(x:Real[_]) -> Real {
 }
 
 /**
- * Exponentiate a vector and normalize to sum to one.
+ * Take the logarithm of each elements of a vector and return the sum.
+ */
+function log_sum(x:Real[_]) -> Real {
+  return transform_reduce<Real>(x, 0.0, @(x:Real, y:Real) -> Real {
+      return x + y; }, @(x:Real) -> Real { return log(x); });
+}
+
+/**
+ * Take the exponential of each element of a vector and normalize to sum to one.
  */
 function norm_exp(x:Real[_]) -> Real[_] {
   assert length(x) > 0;
@@ -22,7 +30,7 @@ function norm_exp(x:Real[_]) -> Real[_] {
     r <- r + exp(x[n] - mx);
   }
   auto W <- mx + log(r);
-  return transform(x, @(w:Real) -> Real { return exp(w - W); });
+  return transform<Real>(x, @(w:Real) -> Real { return exp(w - W); });
 }
 
 /**
@@ -215,7 +223,7 @@ function cumulative_offspring_to_ancestors_permute(O:Integer[_]) -> Integer[_] {
  * Convert a cumulative offspring vector into an offspring vector.
  */
 function cumulative_offspring_to_offspring(O:Integer[_]) -> Integer[_] {
-  return adjacent_difference(O, @(x:Integer, y:Integer) -> Integer { return x - y; });
+  return adjacent_difference<Integer>(O, @(x:Integer, y:Integer) -> Integer { return x - y; });
 }
 
 /**

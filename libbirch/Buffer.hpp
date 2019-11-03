@@ -20,20 +20,15 @@ namespace libbirch {
 template<class T>
 class Buffer {
 public:
+  Buffer(const Buffer& o) = delete;
+  Buffer(Buffer&& o) = delete;
+  Buffer& operator=(const Buffer&) = delete;
+  Buffer& operator=(Buffer&&) = delete;
+
   /**
    * Constructor.
    */
   Buffer();
-
-  /**
-   * Copy constructor.
-   */
-  Buffer(const Buffer<T>& o) = delete;
-
-  /**
-   * Assignment operator.
-   */
-  Buffer<T>& operator=(const Buffer<T>&) = delete;
 
   /**
    * Increment the usage count.
@@ -66,12 +61,12 @@ public:
    * Compute the number of bytes that should be allocated for a buffer of
    * this type with @p n elements.
    */
-  static int64_t size(const int64_t n);
+  static size_t size(const int64_t n);
 
   /**
    * Id of the thread that allocated the buffer.
    */
-  unsigned tid;
+  int tid;
 
 private:
   /**
@@ -89,14 +84,14 @@ private:
 
 template<class T>
 libbirch::Buffer<T>::Buffer() :
-    tid(libbirch::tid),
-    useCount(0) {
+    tid(get_thread_num()),
+    useCount(1) {
   //
 }
 
 template<class T>
 void libbirch::Buffer<T>::incUsage() {
-  ++useCount;
+  useCount.increment();
 }
 
 template<class T>
@@ -121,7 +116,6 @@ const T* libbirch::Buffer<T>::buf() const {
 }
 
 template<class T>
-int64_t libbirch::Buffer<T>::size(const int64_t n) {
-  return n > 0 ? sizeof(T)*n + sizeof(Buffer<T>) - 1u : 0;
-  // ^ -1 because `first` field is actually the first byte of the contents
+size_t libbirch::Buffer<T>::size(const int64_t n) {
+  return n > 0 ? sizeof(T)*n + sizeof(Buffer<T>) : 0;
 }

@@ -11,14 +11,10 @@ thread_local static std::mt19937_64 rng;
  */
 function seed(s:Integer) {
   cpp{{
-  #ifdef _OPENMP
-  #pragma omp parallel num_threads(libbirch::nthreads)
+  #pragma omp parallel num_threads(libbirch::get_max_threads())
   {
-    rng.seed(s + libbirch::tid);
+    rng.seed(s + libbirch::get_thread_num());
   }
-  #else
-  rng.seed(s);
-  #endif
   }}
 }
 
@@ -28,15 +24,11 @@ function seed(s:Integer) {
 function seed() {
   cpp{{
   std::random_device rd;
-  #ifdef _OPENMP
-  #pragma omp parallel num_threads(libbirch::nthreads)
+  #pragma omp parallel num_threads(libbirch::get_max_threads())
   {
     #pragma omp critical
     rng.seed(rd());
   }
-  #else
-  rng.seed(rd());
-  #endif
   }}
 }
 
@@ -159,8 +151,8 @@ function simulate_multinomial(n:Integer, ρ:Real[_]) -> Integer[_] {
  * Simulate a compound-gamma distribution.
  *
  * - k: Shape.
- * - α: Prior shape.
- * - β: Prior scale.
+ * - α: Shape.
+ * - β: Scale.
  *
  */
  function simulate_compound_gamma(k:Real, α:Real, β:Real) -> Real {
@@ -190,7 +182,7 @@ function simulate_multinomial(n:Integer, ρ:Real[_], Z:Real) -> Integer[_] {
   j:Integer <- D;
   i:Integer <- n;
   u:Real;
-  x:Integer[D];
+  x:Integer[_] <- vector(0, D);
     
   while i > 0 {
     u <- simulate_uniform(0.0, 1.0);
@@ -227,7 +219,7 @@ function simulate_dirichlet(α:Real[_]) -> Real[_] {
   z <- 1.0/z;
   for (i:Integer in 1..D) {
     x[i] <- z*x[i];
-  }
+  }  
   return x;
 }
 
@@ -238,7 +230,7 @@ function simulate_dirichlet(α:Real[_]) -> Real[_] {
  * - D: Number of dimensions.
  */
 function simulate_dirichlet(α:Real, D:Integer) -> Real[_] {
-  assert D >= 0;
+  assert D > 0;
   x:Real[D];
   z:Real <- 0.0;
 
@@ -336,23 +328,6 @@ function simulate_gaussian(μ:Real, σ2:Real) -> Real {
 }
 
 /**
- * Simulate a log-Gaussian distribution.
- *
- * - μ: Mean (of logarithm).
- * - σ2: Variance (of logarithm).
- */
-function simulate_log_gaussian(μ:Real, σ2:Real) -> Real {
-  assert 0.0 <= σ2;
-  if (σ2 == 0.0) {
-    return μ;
-  } else {
-    cpp{{
-    return std::lognormal_distribution<bi::type::Real>(μ, std::sqrt(σ2))(rng);
-    }}
-  }
-}
-
-/**
  * Simulate a Student's $t$-distribution.
  *
  * - ν: Degrees of freedom.
@@ -397,6 +372,18 @@ function simulate_beta(α:Real, β:Real) -> Real {
 }
 
 /**
+ * Simulate $\chi^2$ distribution.
+ *
+ * - ν: Degrees of freedom.
+ */
+function simulate_chi_squared(ν:Real) -> Real {
+  assert 0.0 < ν;
+  cpp{{
+  return std::chi_squared_distribution<bi::type::Real>(ν)(rng);
+  }}
+}
+
+/**
  * Simulate a gamma distribution.
  *
  * - k: Shape.
@@ -411,6 +398,36 @@ function simulate_gamma(k:Real, θ:Real) -> Real {
 }
 
 /**
+ * Simulate a Wishart distribution.
+ *
+ * - Ψ: Scale.
+ * - k: Degrees of freedeom.
+ */
+function simulate_wishart(Ψ:Real[_,_], k:Real) -> Real[_,_] {
+  assert rows(Ψ) == columns(Ψ);
+  assert k > rows(Ψ) - 1;
+  auto p <- rows(Ψ);
+  A:Real[p,p];
+  
+  for auto i in 1..p {
+    for auto j in 1..p {
+      if j == i {
+        /* on diagonal */
+        A[i,j] <- sqrt(simulate_chi_squared(k - i + 1));
+      } else if j < i {
+        /* in lower triangle */
+        A[i,j] <- simulate_gaussian(0.0, 1.0);
+      } else {
+        /* in upper triangle */
+        A[i,j] <- 0.0;
+      }
+    }
+  }
+  auto L <- cholesky(Ψ)*A;
+  return L*transpose(L);
+}
+
+/**
  * Simulate an inverse-gamma distribution.
  *
  * - α: Shape.
@@ -418,6 +435,16 @@ function simulate_gamma(k:Real, θ:Real) -> Real {
  */
 function simulate_inverse_gamma(α:Real, β:Real) -> Real {
   return 1.0/simulate_gamma(α, 1.0/β);
+}
+
+/**
+ * Simulate an inverse-Wishart distribution.
+ *
+ * - Ψ: Scale.
+ * - k: Degrees of freedeom.
+ */
+function simulate_inverse_wishart(Ψ:Real[_,_], k:Real) -> Real[_,_] {
+  return inv(llt(simulate_wishart(inv(llt(Ψ)), k)));
 }
 
 /**
@@ -520,8 +547,7 @@ function simulate_dirichlet_categorical(α:Real[_]) -> Integer {
  * - n: Number of trials.
  * - α: Concentrations.
  */
-function simulate_dirichlet_multinomial(n:Integer, α:Real[_]) ->
-    Integer[_] {
+function simulate_dirichlet_multinomial(n:Integer, α:Real[_]) -> Integer[_] {
   return simulate_multinomial(n, simulate_dirichlet(α));
 }
 
@@ -608,78 +634,44 @@ function simulate_linear_normal_inverse_gamma_gaussian(a:Real, μ:Real,
  * - Σ: Covariance.
  */
 function simulate_multivariate_gaussian(μ:Real[_], Σ:Real[_,_]) -> Real[_] {
-  D:Integer <- length(μ);
+  auto D <- length(μ);
   z:Real[D];
-  for (d:Integer in 1..D) {
+  for auto d in 1..D {
     z[d] <- simulate_gaussian(0.0, 1.0);
   }
-  return μ + chol(Σ)*z;
+  return μ + cholesky(Σ)*z;
 }
 
 /**
- * Simulate a multivariate Gaussian distribution with diagonal covariance.
+ * Simulate a multivariate Gaussian distribution with independent elements.
+ *
+ * - μ: Mean.
+ * - σ2: Variance.
+ */
+function simulate_multivariate_gaussian(μ:Real[_], σ2:Real[_]) -> Real[_] {
+  auto D <- length(μ);
+  z:Real[D];
+  for auto d in 1..D {
+    z[d] <- μ[d] + simulate_gaussian(0.0, σ2[d]);
+  }
+  return z;
+}
+
+/**
+ * Simulate a multivariate Gaussian distribution with independent elements of
+ * identical variance.
  *
  * - μ: Mean.
  * - σ2: Variance.
  */
 function simulate_multivariate_gaussian(μ:Real[_], σ2:Real) -> Real[_] {
-  D:Integer <- length(μ);
+  auto D <- length(μ);
+  auto σ <- sqrt(σ2);
   z:Real[D];
-  σ:Real <- sqrt(σ2);
-  for (d:Integer in 1..D) {
+  for auto d in 1..D {
     z[d] <- μ[d] + σ*simulate_gaussian(0.0, 1.0);
   }
   return z;
-}
-
-/**
- * Simulate a multivariate Student's $t$-distribution variate with
- * location and scale.
- *
- * - ν: Degrees of freedom.
- * - μ: Location.
- * - Λ: Precision.
- */
-function simulate_multivariate_student_t(ν:Real, μ:Real[_], Λ:Real[_,_]) ->
-    Real[_] {
-  D:Integer <- length(μ);
-  z:Real[D];
-  for (d:Integer in 1..D) {
-    z[d] <- simulate_student_t(ν);
-  }
-  return μ + solve(transpose(chol(Λ)), z);
-}
-
-/**
- * Simulate a multivariate Student's $t$-distribution variate with
- * location and diagonal scaling.
- *
- * - ν: Degrees of freedom.
- * - μ: Location.
- * - λ: Precision.
- */
-function simulate_multivariate_student_t(ν:Real, μ:Real[_], λ:Real) ->
-    Real[_] {
-  D:Integer <- length(μ);
-  z:Real[D];
-  σ:Real <- sqrt(1.0/λ);
-  for (d:Integer in 1..D) {
-    z[d] <- μ[d] + σ*simulate_student_t(ν);
-  }
-  return z;
-}
-
-/**
- * Simulate a multivariate normal inverse-gamma distribution.
- *
- * - μ: Mean.
- * - Λ: Precision.
- * - α: Shape of inverse-gamma on scale.
- * - β: Scale of inverse-gamma on scale.
- */
-function simulate_multivariate_normal_inverse_gamma(μ:Real[_], Λ:LLT,
-    α:Real, β:Real) -> Real[_] {
-  return simulate_multivariate_student_t(2.0*α, μ, Λ*(α/β));
 }
 
 /**
@@ -690,7 +682,7 @@ function simulate_multivariate_normal_inverse_gamma(μ:Real[_], Λ:LLT,
  * - α: Shape of the inverse-gamma.
  * - β: Scale of the inverse-gamma.
  */
-function simulate_multivariate_inverse_gamma_gaussian(μ:Real[_], α:Real,
+function simulate_inverse_gamma_multivariate_gaussian(μ:Real[_], α:Real,
     β:Real) -> Real[_] {
   D:Integer <- length(μ);
   z:Real[D];
@@ -702,52 +694,334 @@ function simulate_multivariate_inverse_gamma_gaussian(μ:Real[_], α:Real,
 }
 
 /**
+ * Simulate a multivariate normal inverse-gamma distribution.
+ *
+ * - ν: Precision times mean.
+ * - Λ: Precision.
+ * - α: Shape of inverse-gamma on scale.
+ * - β: Scale of inverse-gamma on scale.
+ */
+function simulate_multivariate_normal_inverse_gamma(ν:Real[_], Λ:LLT,
+    α:Real, β:Real) -> Real[_] {
+  return simulate_multivariate_student_t(2.0*α, solve(Λ, ν), (β/α)*inv(Λ));
+}
+
+/**
  * Simulate a multivariate Gaussian distribution with a multivariate normal
  * inverse-gamma prior.
  *
- * - μ: Mean.
+ * - ν: Precision times mean.
  * - Λ: Precision.
  * - α: Shape of the inverse-gamma.
  * - β: Scale of the inverse-gamma.
+ * - γ: Scale accumulator of the inverse-gamma.
  */
-function simulate_multivariate_normal_inverse_gamma_gaussian(μ:Real[_],
-    Λ:LLT, α:Real, β:Real) -> Real[_] {
+function simulate_multivariate_normal_inverse_gamma_multivariate_gaussian(
+    ν:Real[_], Λ:LLT, α:Real, γ:Real) -> Real[_] {
+  auto μ <- solve(Λ, ν);
+  auto β <- γ - 0.5*dot(μ, ν);
   return simulate_multivariate_student_t(2.0*α, μ,
-      (α/β)*cholinv(identity(rows(Λ)) + inv(Λ)));
+      (β/α)*(identity(rows(Λ)) + inv(Λ)));
 }
 
 /**
- * Simulate a Gaussian distribution with a multivariate linear normal
- * inverse-gamma prior.
+ * Simulate a Gaussian distribution with a linear transformation of a
+ * multivariate linear normal inverse-gamma prior.
  *
  * - A: Scale.
- * - μ: Mean.
+ * - ν: Precision times mean.
  * - c: Offset.
  * - Λ: Precision.
  * - α: Shape of the inverse-gamma.
- * - β: Scale of the inverse-gamma.
+ * - γ: Scale accumulator of the inverse-gamma.
  */
-function simulate_multivariate_linear_normal_inverse_gamma_gaussian(
-    A:Real[_,_], μ:Real[_], c:Real[_], Λ:LLT, α:Real, β:Real) -> Real[_] {
+function simulate_linear_multivariate_normal_inverse_gamma_multivariate_gaussian(
+    A:Real[_,_], ν:Real[_], c:Real[_], Λ:LLT, α:Real, γ:Real) -> Real[_] {
+  auto μ <- solve(Λ, ν);
+  auto β <- γ - 0.5*dot(μ, ν);
   return simulate_multivariate_student_t(2.0*α, A*μ + c,
-      (α/β)*cholinv(identity(rows(A)) + A*solve(Λ, transpose(A))));
+      (β/α)*(identity(rows(A)) + A*solve(Λ, transpose(A))));
 }
 
 /**
- * Simulate a Gaussian distribution with a multivariate dot normal inverse-gamma
- * prior.
+ * Simulate a matrix Gaussian distribution.
  *
- * - a: Scale.
- * - μ: Mean.
- * - c: Offset.
- * - Λ: Precision.
- * - α: Shape of the inverse-gamma.
- * - β: Scale of the inverse-gamma.
+ * - M: Mean.
+ * - U: Among-row covariance.
+ * - V: Among-column covariance.
  */
-function simulate_multivariate_dot_normal_inverse_gamma_gaussian(
-    a:Real[_], μ:Real[_], c:Real, Λ:LLT, α:Real, β:Real) -> Real {
-  return simulate_student_t(2.0*α, dot(a, μ) + c,
-      (β/α)*(1.0 + dot(a, solve(Λ, a))));
+function simulate_matrix_gaussian(M:Real[_,_], U:Real[_,_], V:Real[_,_]) ->
+    Real[_,_] {
+  assert rows(M) == rows(U);
+  assert rows(M) == columns(U);
+  assert columns(M) == rows(V);
+  assert columns(M) == columns(V);
+  
+  auto N <- rows(M);
+  auto P <- columns(M);
+  Z:Real[N,P];
+  for auto n in 1..N {
+    for auto p in 1..P {
+      Z[n,p] <- simulate_gaussian(0.0, 1.0);
+    }
+  }
+  return M + cholesky(U)*Z*transpose(cholesky(V));
+}
+
+/**
+ * Simulate a matrix Gaussian distribution with independent columns.
+ *
+ * - M: Mean.
+ * - U: Among-row covariance.
+ * - σ2: Among-column variances.
+ */
+function simulate_matrix_gaussian(M:Real[_,_], U:Real[_,_], σ2:Real[_]) ->
+    Real[_,_] {
+  assert rows(M) == rows(U);
+  assert rows(M) == columns(U);
+  assert columns(M) == length(σ2);
+  
+  auto N <- rows(M);
+  auto P <- columns(M);
+  Z:Real[N,P];
+  for auto n in 1..N {
+    for auto p in 1..P {
+      Z[n,p] <- simulate_gaussian(0.0, 1.0);
+    }
+  }
+  return M + cholesky(U)*Z*diagonal(sqrt(σ2));
+}
+
+/**
+ * Simulate a matrix Gaussian distribution with independent rows.
+ *
+ * - M: Mean.
+ * - V: Among-column variances.
+ */
+function simulate_matrix_gaussian(M:Real[_,_], V:Real[_,_]) -> Real[_,_] {
+  assert columns(M) == rows(V);
+  assert columns(M) == columns(V);
+  
+  auto N <- rows(M);
+  auto P <- columns(M);
+  Z:Real[N,P];
+  for auto n in 1..N {
+    for auto p in 1..P {
+      Z[n,p] <- simulate_gaussian(0.0, 1.0);
+    }
+  }
+  return M + Z*transpose(cholesky(V));
+}
+
+/**
+ * Simulate a matrix Gaussian distribution with independent elements.
+ *
+ * - M: Mean.
+ * - σ2: Variances.
+ */
+function simulate_matrix_gaussian(M:Real[_,_], σ2:Real[_]) -> Real[_,_] {
+  assert columns(M) == length(σ2);
+  
+  auto N <- rows(M);
+  auto P <- columns(M);
+  X:Real[N,P];
+  for auto n in 1..N {
+    for auto p in 1..P {
+      X[n,p] <- simulate_gaussian(M[n,p], σ2[p]);
+    }
+  }
+  return X;
+}
+
+/**
+ * Simulate a matrix normal-inverse-gamma distribution.
+ *
+ * - N: Precision times mean matrix.
+ * - Λ: Precision.
+ * - α: Variance shape.
+ * - γ: Variance scale accumulators.
+ */
+function simulate_matrix_normal_inverse_gamma(N:Real[_,_], Λ:LLT, α:Real,
+    γ:Real[_]) -> Real[_,_] {
+  auto M <- solve(Λ, N);
+  auto β <- γ - 0.5*diagonal(transpose(M)*N);
+  auto Σ <- inv(Λ);
+  return simulate_matrix_student_t(2.0*α, M, Σ, β/α);
+}
+
+/**
+ * Simulate a Gaussian distribution with a matrix-normal-inverse-gamma prior.
+ *
+ * - N: Precision times mean matrix.
+ * - Λ: Precision.
+ * - α: Variance shape.
+ * - γ: Variance scale accumulators.
+ */
+function simulate_matrix_normal_inverse_gamma_matrix_gaussian(
+    N:Real[_,_], Λ:LLT, α:Real, γ:Real[_]) -> Real[_,_] {
+  auto M <- solve(Λ, N);
+  auto β <- γ - 0.5*diagonal(transpose(M)*N);
+  auto Σ <- identity(rows(M)) + inv(Λ);
+  return simulate_matrix_student_t(2.0*α, M, Σ, β/α);
+}
+
+/**
+ * Simulate a Gaussian distribution with linear transformation of
+ * a matrix-normal-inverse-gamma prior.
+ *
+ * - A: Scale.
+ * - N: Precision times mean matrix.
+ * - C: Offset.
+ * - Λ: Precision.
+ * - α: Variance shape.
+ * - γ: Variance scale accumulators.
+ */
+function simulate_linear_matrix_normal_inverse_gamma_matrix_gaussian(
+    A:Real[_,_], N:Real[_,_], C:Real[_,_], Λ:LLT, α:Real, γ:Real[_]) ->
+    Real[_,_] {
+  auto M <- solve(Λ, N);
+  auto β <- γ - 0.5*diagonal(transpose(M)*N);
+  auto Σ <- identity(rows(A)) + A*solve(Λ, transpose(A));
+  return simulate_matrix_student_t(2.0*α, A*M + C, Σ, β/α);
+}
+
+/**
+ * Simulate a matrix normal-inverse-Wishart distribution.
+ *
+ * - N: Precision times mean matrix.
+ * - Λ: Precision.
+ * - Ψ: Variance shape.
+ * - k: Degrees of freedom.
+ */
+function simulate_matrix_normal_inverse_wishart(N:Real[_,_], Λ:LLT,
+    Ψ:Real[_,_], k:Real) -> Real[_,_] {
+  auto p <- columns(N);
+  auto M <- solve(Λ, N);
+  auto Σ <- inv(Λ)/(k - p + 1.0);
+  return simulate_matrix_student_t(k - p + 1.0, M, Σ, Ψ);
+}
+
+/**
+ * Simulate a Gaussian distribution with matrix-normal-inverse-Wishart prior.
+ *
+ * - N: Precision times mean matrix.
+ * - Λ: Precision.
+ * - Ψ: Variance shape.
+ * - k: Degrees of freedom.
+ */
+function simulate_matrix_normal_inverse_wishart_matrix_gaussian(N:Real[_,_],
+    Λ:LLT, Ψ:Real[_,_], k:Real) -> Real[_,_] {
+  auto p <- columns(N);
+  auto M <- solve(Λ, N);
+  auto Σ <- (identity(rows(N)) + inv(Λ))/(k - p + 1.0);
+  return simulate_matrix_student_t(k - p + 1.0, M, Σ, Ψ);
+}
+
+/**
+ * Simulate a Gaussian distribution with linear transformation of a
+ * matrix-normal-inverse-Wishart prior.
+ *
+ * - A: Scale.
+ * - N: Precision times mean matrix.
+ * - C: Offset.
+ * - Λ: Precision.
+ * - Ψ: Variance shape.
+ * - k: Degrees of freedom.
+ */
+function simulate_linear_matrix_normal_inverse_wishart_matrix_gaussian(
+    A:Real[_,_], N:Real[_,_], C:Real[_,_], Λ:LLT, Ψ:Real[_,_], k:Real) -> Real[_,_] {
+  auto p <- columns(N);
+  auto M <- solve(Λ, N);
+  auto Σ <- (identity(rows(A)) + A*solve(Λ, transpose(A)))/(k - p + 1.0);
+  return simulate_matrix_student_t(k - p + 1.0, A*M + C, Σ, Ψ);
+}
+
+/**
+ * Simulate a multivariate Student's $t$-distribution variate with
+ * location and scale.
+ *
+ * - k: Degrees of freedom.
+ * - μ: Mean.
+ * - Σ: Covariance.
+ */
+function simulate_multivariate_student_t(k:Real, μ:Real[_], Σ:Real[_,_]) ->
+    Real[_] {
+  auto D <- length(μ);
+  z:Real[D];
+  for auto d in 1..D {
+    z[d] <- simulate_student_t(k);
+  }
+  return μ + cholesky(Σ)*z;
+}
+
+/**
+ * Simulate a multivariate Student's $t$-distribution variate with
+ * location and diagonal scaling.
+ *
+ * - k: Degrees of freedom.
+ * - μ: Mean.
+ * - σ2: Variance.
+ */
+function simulate_multivariate_student_t(k:Real, μ:Real[_], σ2:Real) ->
+    Real[_] {
+  auto D <- length(μ);
+  auto σ <- sqrt(σ2);
+  z:Real[D];
+  for auto d in 1..D {
+    z[d] <- μ[d] + σ*simulate_student_t(k);
+  }
+  return z;
+}
+
+/**
+ * Simulate a matrix Student's $t$-distribution variate.
+ *
+ * - k: Degrees of freedom.
+ * - M: Mean.
+ * - U: Among-row covariance.
+ * - V: Among-column covariance.
+ */
+function simulate_matrix_student_t(k:Real, M:Real[_,_], U:Real[_,_],
+    V:Real[_,_]) -> Real[_,_] {
+  assert rows(M) == rows(U);
+  assert rows(M) == columns(U);
+  assert columns(M) == rows(V);
+  assert columns(M) == columns(V);
+  
+  auto N <- rows(M);
+  auto P <- columns(M);
+  Z:Real[N,P];
+  for auto n in 1..N {
+    for auto p in 1..P {
+      Z[n,p] <- simulate_student_t(k);
+    }
+  }
+  return M + cholesky(U)*Z*transpose(cholesky(V));
+}
+
+/**
+ * Simulate a matrix Student's $t$-distribution variate.
+ *
+ * - k: Degrees of freedom.
+ * - M: Mean.
+ * - U: Among-row covariance.
+ * - v: Independent within-column covariance.
+ */
+function simulate_matrix_student_t(k:Real, M:Real[_,_], U:Real[_,_],
+    v:Real[_]) -> Real[_,_] {
+  assert rows(M) == rows(U);
+  assert rows(M) == columns(U);
+  assert columns(M) == length(v);
+  
+  auto N <- rows(M);
+  auto P <- columns(M);
+  Z:Real[N,P];
+  for auto n in 1..N {
+    for auto p in 1..P {
+      Z[n,p] <- simulate_student_t(k);
+    }
+  }
+  return M + cholesky(U)*Z*diagonal(sqrt(v));
 }
 
 /**
@@ -756,7 +1030,7 @@ function simulate_multivariate_dot_normal_inverse_gamma_gaussian(
  * - l: Lower bound of hyperrectangle.
  * - u: Upper bound of hyperrectangle.
  */
-function simulate_multivariate_uniform(l:Real[_], u:Real[_]) -> Real[_] {
+function simulate_independent_uniform(l:Real[_], u:Real[_]) -> Real[_] {
   assert length(l) == length(u);
   D:Integer <- length(l);
   z:Real[D];
@@ -772,7 +1046,7 @@ function simulate_multivariate_uniform(l:Real[_], u:Real[_]) -> Real[_] {
  * - l: Lower bound of hyperrectangle.
  * - u: Upper bound of hyperrectangle.
  */
-function simulate_multivariate_uniform_int(l:Integer[_], u:Integer[_]) -> Integer[_] {
+function simulate_independent_uniform_int(l:Integer[_], u:Integer[_]) -> Integer[_] {
   assert length(l) == length(u);
   D:Integer <- length(l);
   z:Integer[D];
@@ -780,78 +1054,4 @@ function simulate_multivariate_uniform_int(l:Integer[_], u:Integer[_]) -> Intege
     z[d] <- simulate_uniform_int(l[d], u[d]);
   }
   return z;
-}
-
-/**
- * Simulate ridge regression parameters.
- *
- * - N: Prior precision times mean for weights, where each column represents
- *      the mean of the weight for a separate output. 
- * - Λ: Common prior precision.
- * - α: Common prior weight and likelihood covariance shape.
- * - β: Prior covariance scale accumulators.
- *
- * Returns: Matrix of weights and vector of variances, where each column in
- * the matrix and element in the vector corresponds to a different output
- * in the regression.
- */
-function simulate_ridge(N:Real[_,_], Λ:LLT, α:Real, γ:Real[_]) ->
-    (Real[_,_], Real[_]) {
-  auto R <- rows(N);
-  auto C <- columns(N);
-  auto M <- solve(Λ, N);
-  auto Σ <- inv(Λ);
-  auto β <- γ - 0.5*diagonal(transpose(N)*M);
-    
-  W:Real[R,C];
-  σ2:Real[C];
-  for auto j in 1..C {
-    σ2[j] <- simulate_inverse_gamma(α, β[j]);
-    W[1..R,j] <- simulate_multivariate_gaussian(M[1..R,j], Σ*σ2[j]);
-  }    
-  return (W, σ2);
-}
-
-/**
- * Simulate regression.
- *
- * - W: Weight matrix, where each column represents the weights for a
- *      different output. 
- * - σ2: Variance vector, where each element represents the variance for a
- *      different output.
- * - u: Input.
- *
- * Returns: Outputs of the regression.
- */
-function simulate_regression(W:Real[_,_], σ2:Real[_], u:Real[_]) -> Real[_] {
-  auto μ <- transpose(W)*u;
-  auto D <- length(μ);
-  x:Real[D];
-  for auto d in 1..D {
-    x[d] <- simulate_gaussian(μ[d], σ2[d]);
-  }
-  return x;
-}
-
-/**
- * Simulate ridge regression.
- *
- * - N: Prior precision times mean for weights, where each column represents
- *      the mean of the weight for a separate output. 
- * - Λ: Common prior precision.
- * - α: Common prior weight and likelihood covariance shape.
- * - β: Prior covariance scale accumulators.
- * - u: Input.
- */
-function simulate_ridge_regression(N:Real[_,_], Λ:LLT, α:Real, γ:Real[_],
-    u:Real[_]) -> Real[_] {
-  D:Integer <- columns(N);
-  M:Real[_,_] <- solve(Λ, N);
-  μ:Real[_] <- transpose(M)*u;
-  σ2:Real[_] <- (γ - 0.5*diagonal(transpose(N)*M))*(1.0 + dot(u, solve(Λ, u)))/α;  
-  x:Real[D];
-  for d:Integer in 1..D {
-    x[d] <- simulate_student_t(2.0*α, μ[d], σ2[d]);
-  }
-  return x;
 }

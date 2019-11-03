@@ -3,10 +3,8 @@
  */
 #pragma once
 
+#include "libbirch/type.hpp"
 #include "libbirch/Nil.hpp"
-#include "libbirch/Shared.hpp"
-#include "libbirch/Weak.hpp"
-#include "libbirch/Init.hpp"
 
 namespace libbirch {
 /**
@@ -14,44 +12,38 @@ namespace libbirch {
  *
  * @ingroup libbirch
  *
- * @tparam T Type.
+ * @tparam T Type type.
  */
-template<class T>
+template<class T, class Enable = void>
 class Optional {
+  template<class U, class Enable1> friend class Optional;
+
+  static_assert(!std::is_lvalue_reference<T>::value,
+      "Optional does not support lvalue reference types.");
 public:
   /**
-   * Default constructor.
+   * Constructor.
    */
-  Optional() :
+  Optional(const Nil& = nil) :
       value(),
       hasValue(false) {
     //
   }
 
   /**
-   * Constructor for no value.
+   * Constructor.
    */
-  Optional(const Nil&) :
+  template<IS_NOT_VALUE(T)>
+  Optional(Label* context, const Nil& = nil) :
       value(),
       hasValue(false) {
     //
   }
 
   /**
-   * Constructor for a value.
+   * Value copy constructor.
    */
-  Optional(const T& value) :
-      value(value),
-      hasValue(true) {
-    //
-  }
-
-  /**
-   * Generic value constructor.
-   *
-   * @tparam U Value type (convertible to @p T).
-   */
-  template<class U>
+  template<class U, IS_CONVERTIBLE(U,T)>
   Optional(const U& value) :
       value(value),
       hasValue(true) {
@@ -59,37 +51,154 @@ public:
   }
 
   /**
-   * Generic copy constructor.
-   *
-   * @tparam U Value type (convertible to @p T).
+   * Value copy constructor.
    */
-  template<class U>
-  Optional(const Optional<U>& o) :
-      hasValue(o.query()) {
-    if (hasValue) {
-      value = o.get();
-    }
+  template<class U, IS_NOT_VALUE(T), IS_CONVERTIBLE(U,T)>
+  Optional(Label* context, const U& value) :
+      value(context, value),
+      hasValue(true) {
+    //
+  }
+
+  /**
+   * Value move constructor.
+   *
+   * @todo Make generic while avoiding use of universal reference.
+   */
+  Optional(T&& value) :
+      value(std::move(value)),
+      hasValue(true) {
+    //
+  }
+
+  /**
+   * Value move constructor.
+   *
+   * @todo Make generic while avoiding use of universal reference.
+   */
+  template<IS_VALUE(T)>
+  Optional(T&& value) :
+      value(std::move(value)),
+      hasValue(true) {
+    //
+  }
+
+  /**
+   * Value move constructor.
+   *
+   * @todo Make generic while avoiding use of universal reference.
+   */
+  template<IS_NOT_VALUE(T)>
+  Optional(Label* context, T&& value) :
+      value(context, std::move(value)),
+      hasValue(true) {
+    //
   }
 
   /**
    * Copy constructor.
    */
-  Optional(const Optional<T>& o) = default;
+  Optional(const Optional<T>& o) :
+      value(o.value),
+      hasValue(o.hasValue) {
+    //
+  }
+
+  /**
+   * Copy constructor.
+   */
+  template<class U, IS_CONVERTIBLE(U,T)>
+  Optional(const Optional<U>& o) :
+      value(o.value),
+      hasValue(o.hasValue) {
+    //
+  }
+
+  /**
+   * Copy constructor.
+   */
+  template<IS_NOT_VALUE(T), class U, IS_CONVERTIBLE(U,T)>
+  Optional(Label* context, const Optional<U>& o) :
+      value(context, o.value),
+      hasValue(o.hasValue) {
+    //
+  }
 
   /**
    * Move constructor.
    */
-  Optional(Optional<T> && o) = default;
+  Optional(Optional<T>&& o) :
+      value(std::move(o.value)),
+      hasValue(o.hasValue) {
+    //
+  }
 
   /**
-   * Copy assignment.
+   * Move constructor.
    */
-  Optional<T>& operator=(const Optional<T>& o) = default;
+  template<class U, IS_CONVERTIBLE(U,T)>
+  Optional(Optional<U>&& o) :
+      value(std::move(o.value)),
+      hasValue(o.hasValue) {
+    //
+  }
 
   /**
-   * Move assignment.
+   * Move constructor.
    */
-  Optional<T>& operator=(Optional<T> && o) = default;
+  template<IS_NOT_VALUE(T), class U, IS_CONVERTIBLE(U,T)>
+  Optional(Label* context, Optional<U>&& o) :
+      value(context, std::move(o.value)),
+      hasValue(o.hasValue) {
+    //
+  }
+
+  /**
+   * Deep copy constructor.
+   */
+  template<IS_NOT_VALUE(T)>
+  Optional(Label* context, Label* label, const Optional& o) :
+      value(context, label, o.value),
+      hasValue(o.hasValue) {
+    //
+  }
+
+  /**
+   * Nil assignment operator.
+   */
+  Optional& operator=(const Nil& nil) {
+    return assign(nil);
+  }
+
+  /**
+   * Copy assignment operator.
+   */
+  Optional& operator=(const Optional<T>& o) {
+    return assign(o);
+  }
+
+  /**
+   * Copy assignment operator.
+   */
+  template<IS_VALUE(T)>
+  Optional& operator=(const T& value) {
+    return assign(value);
+  }
+
+  /**
+   * Move assignment operator.
+   */
+  Optional& operator=(Optional<T>&& o) {
+    return assign(std::move(o));
+  }
+
+  /**
+   * Move assignment operator.
+   */
+  template<IS_VALUE(T)>
+  Optional& operator=(T&& value) {
+    return assign(std::move(value));
+  }
 
   /**
    * Is there a value?
@@ -114,6 +223,82 @@ public:
     return value;
   }
 
+  /**
+   * Copy assignment.
+   */
+  template<IS_VALUE(T)>
+  Optional& assign(const Optional<T>& o) {
+    value = o.value;
+    hasValue = o.hasValue;
+    return *this;
+  }
+
+  /**
+   * Copy assignment.
+   */
+  template<IS_NOT_VALUE(T)>
+  Optional& assign(Label* context, const Optional<T>& o) {
+    value.assign(context, o.value);
+    hasValue = o.hasValue;
+    return *this;
+  }
+
+  /**
+   * Move assignment.
+   */
+  template<IS_VALUE(T)>
+  Optional& assign(Optional<T>&& o) {
+    value = std::move(o.value);
+    hasValue = o.hasValue;
+    return *this;
+  }
+
+  /**
+   * Move assignment.
+   */
+  template<IS_NOT_VALUE(T)>
+  Optional& assign(Label* context, Optional<T>&& o) {
+    value.assign(context, std::move(o.value));
+    hasValue = o.hasValue;
+    return *this;
+  }
+
+  template<IS_VALUE(T)>
+  void freeze() {
+    //
+  }
+
+  template<IS_NOT_VALUE(T)>
+  void freeze() {
+    if (hasValue) {
+      value.freeze();
+    }
+  }
+
+  template<IS_VALUE(T)>
+  void thaw(Label* label) {
+    //
+  }
+
+  template<IS_NOT_VALUE(T)>
+  void thaw(Label* label) {
+    if (hasValue) {
+      value.thaw(label);
+    }
+  }
+
+  template<IS_VALUE(T)>
+  void finish() {
+    //
+  }
+
+  template<IS_NOT_VALUE(T)>
+  void finish() {
+    if (hasValue) {
+      value.finish();
+    }
+  }
+
 private:
   /**
    * The contained value, if any.
@@ -127,249 +312,135 @@ private:
 };
 
 /**
- * Optional for shared pointers. Uses the pointer itself, set to nullptr, to
- * denote a missing value, rather than keeping a separate boolean flag.
+ * Optional for pointer types. Uses a null pointer, rather than a flag, to
+ * indicate no value.
  *
  * @ingroup libbirch
  *
- * @tparam T Type.
+ * @tparam T Type type.
  */
 template<class T>
-class Optional<Shared<T>> {
-  template<class U> friend class Optional;
+class Optional<T,IS_POINTER(T)> {
+  template<class U, class Enable1> friend class Optional;
+
+  static_assert(!std::is_lvalue_reference<T>::value,
+      "Optional does not support lvalue reference types.");
 public:
-  /**
-   * Default constructor.
-   */
-  Optional() = default;
+  Optional& operator=(const Optional&) = delete;
+  Optional& operator=(Optional&&) = delete;
 
   /**
-   * Constructor for no value.
+   * Constructor.
    */
-  Optional(const Nil&) :
+  Optional(const Nil& = nil) :
       value() {
     //
   }
 
   /**
-   * Constructor for value.
+   * Constructor.
    */
-  Optional(T* value) :
+  Optional(Label* context, const Nil& = nil) :
+      value() {
+    //
+  }
+
+  /**
+   * Value copy constructor.
+   */
+  template<class U, IS_CONVERTIBLE(U,T)>
+  Optional(const U& value) :
       value(value) {
     //
   }
 
   /**
-   * Constructor for value.
+   * Value copy constructor.
    */
-  template<class U>
-  Optional(const Shared<U>& value) :
-      value(value) {
+  template<class U, IS_CONVERTIBLE(U,T)>
+  Optional(Label* context, const U& value) :
+      value(context, value) {
     //
   }
 
   /**
-   * Generic move constructor for value.
+   * Value move constructor.
+   *
+   * @todo Make generic while avoiding use of universal reference.
    */
-  template<class U>
-  Optional(Shared<U>&& value) :
+  Optional(T&& value) :
       value(std::move(value)) {
     //
   }
 
   /**
-   * Constructor for value.
+   * Value move constructor.
+   *
+   * @todo Make generic while avoiding use of universal reference.
    */
-  template<class U>
-  Optional(const Weak<U>& value) :
-      value(value) {
-    //
-  }
-
-  /**
-   * Generic move constructor for value.
-   */
-  template<class U>
-  Optional(Weak<U>&& value) :
-      value(std::move(value)) {
-    //
-  }
-
-  /**
-   * Constructor for value.
-   */
-  template<class U>
-  Optional(const Init<U>& value) :
-      value(value) {
-    //
-  }
-
-  /**
-   * Generic move constructor for value.
-   */
-  template<class U>
-  Optional(Init<U>&& value) :
-      value(std::move(value)) {
+  Optional(Label* context, T&& value) :
+      value(context, std::move(value)) {
     //
   }
 
   /**
    * Copy constructor.
    */
-  Optional(const Optional<Shared<T>>& o) = default;
+  Optional(const Optional<T>& o) :
+      value(o.value) {
+    //
+  }
 
   /**
-   * Generic copy constructor.
+   * Copy constructor.
    */
-  template<class U>
-  Optional(const Optional<Shared<U>>& o) :
+  template<class U, IS_CONVERTIBLE(U,T)>
+  Optional(const Optional<U>& o) :
       value(o.value) {
+    //
+  }
+
+  /**
+   * Copy constructor.
+   */
+  template<class U, IS_CONVERTIBLE(U,T)>
+  Optional(Label* context, const Optional<U>& o) :
+      value(context, o.value) {
     //
   }
 
   /**
    * Move constructor.
    */
-  Optional(Optional<Shared<T>> && o) = default;
-
-  /**
-   * Generic move constructor.
-   */
-  template<class U>
-  Optional(Optional<Shared<U>> && o) :
+  Optional(Optional<T>&& o) :
       value(std::move(o.value)) {
     //
   }
 
   /**
-   * Copy assignment.
+   * Move constructor.
    */
-  Optional<Shared<T>>& operator=(const Optional<Shared<T>>& o) = default;
-
-  /**
-   * Generic copy assignment.
-   */
-  template<class U>
-  Optional<Shared<T>>& operator=(const Optional<Shared<U>>& o) {
-    value = o.value;
-    return *this;
+  template<class U, IS_CONVERTIBLE(U,T)>
+  Optional(Optional<U>&& o) :
+      value(std::move(o.value)) {
+    //
   }
 
   /**
-   * Generic copy assignment.
+   * Move constructor.
    */
-  template<class P>
-  Optional<Shared<T>>& operator=(const Optional<P>& o) {
-    value = o.value;
-    return *this;
+  template<class U, IS_CONVERTIBLE(U,T)>
+  Optional(Label* context, Optional<U>&& o) :
+      value(context, std::move(o.value)) {
+    //
   }
 
   /**
-   * Move assignment.
+   * Deep copy constructor.
    */
-  Optional<Shared<T>>& operator=(Optional<Shared<T>> && o) = default;
-
-  /**
-   * Generic move assignment.
-   */
-  template<class U>
-  Optional<Shared<T>>& operator=(Optional<Shared<U>>&& o) {
-    value = std::move(o.value);
-    return *this;
-  }
-
-  /**
-   * Generic move assignment.
-   */
-  template<class P>
-  Optional<Shared<T>>& operator=(Optional<P>&& o) {
-    value = std::move(o.value);
-    return *this;
-  }
-
-  /**
-   * Nil assignment.
-   */
-  Optional<Shared<T>>& operator=(const Nil& o) {
-    value = nullptr;
-    return *this;
-  }
-
-  /**
-   * Copy assignment.
-   */
-  Optional<Shared<T>>& operator=(const Shared<T>& o) {
-    value = o;
-    return *this;
-  }
-
-  /**
-   * Generic copy assignment.
-   */
-  template<class U>
-  Optional<Shared<T>>& operator=(const Shared<U>& o) {
-    value = o;
-    return *this;
-  }
-
-  /**
-   * Generic copy assignment.
-   */
-  template<class U>
-  Optional<Shared<T>>& operator=(const Weak<U>& o) {
-    value = o;
-    return *this;
-  }
-
-  /**
-   * Generic copy assignment.
-   */
-  template<class U>
-  Optional<Shared<T>>& operator=(const Init<U>& o) {
-    value = o;
-    return *this;
-  }
-
-  /**
-   * Move assignment.
-   */
-  Optional<Shared<T>>& operator=(Shared<T> && o) {
-    value = std::move(o);
-    return *this;
-  }
-
-  /**
-   * Generic move assignment.
-   */
-  template<class U>
-  Optional<Shared<T>>& operator=(Shared<U> && o) {
-    value = std::move(o);
-    return *this;
-  }
-
-  /**
-   * Generic move assignment.
-   */
-  template<class U>
-  Optional<Shared<T>>& operator=(Weak<U> && o) {
-    value = std::move(o);
-    return *this;
-  }
-
-  /**
-   * Generic move assignment.
-   */
-  template<class U>
-  Optional<Shared<T>>& operator=(Init<U> && o) {
-    value = std::move(o);
-    return *this;
-  }
-
-  /**
-   * Value conversion.
-   */
-  operator Weak<T>() {
-    return value;
+  Optional(Label* context, Label* label, const Optional& o) :
+      value(context, label, o.value) {
+    //
   }
 
   /**
@@ -382,7 +453,7 @@ public:
   /**
    * Get the value.
    */
-  Shared<T>& get() {
+  T& get() {
     libbirch_assert_msg_(query(), "optional has no value");
     return value;
   }
@@ -390,15 +461,59 @@ public:
   /**
    * Get the value.
    */
-  const Shared<T>& get() const {
+  const T& get() const {
     libbirch_assert_msg_(query(), "optional has no value");
     return value;
   }
 
+  /**
+   * Copy assignment.
+   */
+  Optional& assign(Label* context, const Optional<T>& o) {
+    this->value.assign(context, o.value);
+    return *this;
+  }
+
+  /**
+   * Move assignment.
+   */
+  Optional& assign(Label* context, Optional<T>&& o) {
+    this->value.assign(context, std::move(o.value));
+    return *this;
+  }
+
+  void freeze() {
+    if (query()) {
+      get().freeze();
+    }
+  }
+
+  void thaw(Label* label) {
+    if (query()) {
+      get().thaw(label);
+    }
+  }
+
+  void finish() {
+    if (query()) {
+      get().finish();
+    }
+  }
+
 private:
   /**
-   * The value, if any.
+   * The pointer.
    */
-  Shared<T> value;
+  T value;
+};
+
+template<class T>
+struct is_value<Optional<T>> {
+  static const bool value = is_value<T>::value;
+};
+
+template<class T>
+struct is_value<Optional<T>&> {
+  static const bool value = is_value<T>::value;
 };
 }

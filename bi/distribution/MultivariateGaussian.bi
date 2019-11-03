@@ -27,13 +27,13 @@ final class MultivariateGaussian(μ:Expression<Real[_]>, Σ:Expression<Real[_,_]
     if delay? {
       delay!.prune();
     } else {
-      m1:TransformMultivariateLinearGaussian?;
-      m2:DelayMultivariateGaussian?;
-      if (m1 <- μ.graftMultivariateLinearGaussian())? {
-        delay <- DelayMultivariateLinearGaussianGaussian(future, futureUpdate, m1!.A, m1!.x,
-            m1!.c, Σ);
-      } else if (m2 <- μ.graftMultivariateGaussian())? {
-        delay <- DelayMultivariateGaussianGaussian(future, futureUpdate, m2!, Σ);
+      m1:TransformLinearMultivariate<DelayMultivariateGaussian>?;
+      m3:DelayMultivariateGaussian?;
+      if (m1 <- μ.graftLinearMultivariateGaussian())? {
+        delay <- DelayLinearMultivariateGaussianMultivariateGaussian(future,
+            futureUpdate, m1!.A, m1!.x, m1!.c, Σ);
+      } else if (m3 <- μ.graftMultivariateGaussian())? {
+        delay <- DelayMultivariateGaussianMultivariateGaussian(future, futureUpdate, m3!, Σ);
       } else if force {
         /* try a normal inverse gamma first, then a regular Gaussian */
         if !graftMultivariateNormalInverseGamma()? {
@@ -47,31 +47,18 @@ final class MultivariateGaussian(μ:Expression<Real[_]>, Σ:Expression<Real[_,_]
     if delay? {
       delay!.prune();
     } else {
-      m1:TransformMultivariateLinearGaussian?;
+      m1:TransformLinearMultivariate<DelayMultivariateGaussian>?;
       m2:DelayMultivariateGaussian?;
-      if (m1 <- μ.graftMultivariateLinearGaussian())? {
-        delay <- DelayMultivariateLinearGaussianGaussian(future, futureUpdate, m1!.A, m1!.x,
-            m1!.c, Σ);
+      if (m1 <- μ.graftLinearMultivariateGaussian())? {
+        delay <- DelayLinearMultivariateGaussianMultivariateGaussian(future,
+            futureUpdate, m1!.A, m1!.x, m1!.c, Σ);
       } else if (m2 <- μ.graftMultivariateGaussian())? {
-        delay <- DelayMultivariateGaussianGaussian(future, futureUpdate, m2!, Σ);
+        delay <- DelayMultivariateGaussianMultivariateGaussian(future, futureUpdate, m2!, Σ);
       } else {
         delay <- DelayMultivariateGaussian(future, futureUpdate, μ, Σ);
       }
     }
     return DelayMultivariateGaussian?(delay);
-  }
-
-  function graftMultivariateNormalInverseGamma() ->
-      DelayMultivariateNormalInverseGamma? {
-    if delay? {
-      delay!.prune();
-    } else {
-      S:TransformMultivariateScaledInverseGamma?;
-      if (S <- Σ.graftMultivariateScaledInverseGamma())? {
-        delay <- DelayMultivariateNormalInverseGamma(future, futureUpdate, μ, S!.A, S!.σ2);
-      }
-    }
-    return DelayMultivariateNormalInverseGamma?(delay);
   }
 }
 

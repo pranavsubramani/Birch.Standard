@@ -1,22 +1,14 @@
 /**
- * Abstract dummy event with a value.
+ * Abstract event, with a value.
  */
-class ValueEvent<Value> < Event {
-  function isValue() -> Boolean {
-    return true;
-  }
-
+abstract class ValueEvent<Value> < Event {
   /**
-   * Is there a value associated with this event?
+   * Does this have a value?
    */
-  function hasValue() -> Boolean {
-    assert false;
-  }
+  abstract function hasValue() -> Boolean;
 
   /**
    * Get the value.
    */
-  function value() -> Value {
-    assert false;
-  }
+  abstract function value() -> Value;
 }

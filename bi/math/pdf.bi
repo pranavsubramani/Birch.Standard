@@ -44,7 +44,7 @@ function pdf_binomial(x:Integer, n:Integer, ρ:Real) -> Real {
   assert 0 <= n;
   assert 0.0 <= ρ && ρ <= 1.0;
   cpp{{
-  //return boost::math::pdf(boost::math::binomial_distribution<>(n, ρ), x);
+  return boost::math::pdf(boost::math::binomial_distribution<>(n, ρ), x);
   }}
 }
 
@@ -61,7 +61,7 @@ function pdf_negative_binomial(x:Integer, k:Integer, ρ:Real) -> Real {
   assert 0 < k;
   assert 0.0 <= ρ && ρ <= 1.0;
   cpp{{
-  //return boost::math::pdf(boost::math::negative_binomial_distribution<>(k, ρ), x);
+  return boost::math::pdf(boost::math::negative_binomial_distribution<>(k, ρ), x);
   }}
 }
 
@@ -76,7 +76,7 @@ function pdf_negative_binomial(x:Integer, k:Integer, ρ:Real) -> Real {
 function pdf_poisson(x:Integer, λ:Real) -> Real {
   assert 0.0 <= λ;
   cpp{{
-  //return boost::math::pdf(boost::math::poisson_distribution<>(λ), x);
+  return boost::math::pdf(boost::math::poisson_distribution<>(λ), x);
   }}
 }
 
@@ -183,7 +183,7 @@ function pdf_uniform(x:Real, l:Real, u:Real) -> Real {
 function pdf_exponential(x:Real, λ:Real) -> Real {
   assert 0.0 < λ;
   cpp{{
-  //return boost::math::pdf(boost::math::exponential_distribution<>(λ), x);
+  return boost::math::pdf(boost::math::exponential_distribution<>(λ), x);
   }}
 }
 
@@ -200,7 +200,7 @@ function pdf_weibull(x:Real, k:Real, λ:Real) -> Real {
   assert 0.0 < k;
   assert 0.0 < λ;
   cpp{{
-  //return boost::math::pdf(boost::math::weibull_distribution<>(k, λ), x);
+  return boost::math::pdf(boost::math::weibull_distribution<>(k, λ), x);
   }}
 }
 
@@ -216,23 +216,7 @@ function pdf_weibull(x:Real, k:Real, λ:Real) -> Real {
 function pdf_gaussian(x:Real, μ:Real, σ2:Real) -> Real {
   assert 0.0 < σ2;
   cpp{{
-  //return boost::math::pdf(boost::math::normal_distribution<>(μ, ::sqrt(σ2)), x);
-  }}
-}
-
-/**
- * PDF of a log-Gaussian variate.
- *
- * - x: The variate.
- * - μ: Mean.
- * - σ2: Variance.
- *
- * Return: the probability density.
- */
-function pdf_log_gaussian(x:Real, μ:Real, σ2:Real) -> Real {
-  assert 0.0 < σ2;
-  cpp{{
-  //return boost::math::pdf(boost::math::lognormal_distribution<>(μ, ::sqrt(σ2)), x);
+  return boost::math::pdf(boost::math::normal_distribution<>(μ, ::sqrt(σ2)), x);
   }}
 }
 
@@ -247,7 +231,7 @@ function pdf_log_gaussian(x:Real, μ:Real, σ2:Real) -> Real {
 function pdf_student_t(x:Real, ν:Real) -> Real {
   assert 0.0 < ν;
   cpp{{
-  //return boost::math::pdf(boost::math::students_t_distribution<>(ν), x);
+  return boost::math::pdf(boost::math::students_t_distribution<>(ν), x);
   }}
 }
 
@@ -281,7 +265,22 @@ function pdf_beta(x:Real, α:Real, β:Real) -> Real {
   assert 0.0 < α;
   assert 0.0 < β;
   cpp{{
-  //return boost::math::pdf(boost::math::beta_distribution<>(α, β), x);
+  return boost::math::pdf(boost::math::beta_distribution<>(α, β), x);
+  }}
+}
+
+/**
+ * PDF of $\chi^2$ variate.
+ *
+ * - x: The variate.
+ * - ν: Degrees of freedom.
+ *
+ * Return: the probability density.
+ */
+function pdf_chi_squared(x:Real, ν:Real) -> Real {
+  assert 0.0 < ν;
+  cpp{{
+  return boost::math::pdf(boost::math::chi_squared_distribution<>(ν), x);
   }}
 }
 
@@ -298,8 +297,21 @@ function pdf_gamma(x:Real, k:Real, θ:Real) -> Real {
   assert 0.0 < k;
   assert 0.0 < θ;
   cpp{{
-  //return boost::math::pdf(boost::math::gamma_distribution<>(k, θ), x);
+  return boost::math::pdf(boost::math::gamma_distribution<>(k, θ), x);
   }}
+}
+
+/**
+ * PDF of a Wishart variate.
+ *
+ * - X: The variate.
+ * - Ψ: Scale.
+ * - ν: Degrees of freedom.
+ *
+ * Returns: the probability density.
+ */
+function pdf_wishart(X:Real[_,_], Ψ:Real[_,_], ν:Real) -> Real {
+  return exp(logpdf_wishart(X, Ψ, ν));
 }
 
 /**
@@ -315,8 +327,21 @@ function pdf_inverse_gamma(x:Real, α:Real, β:Real) -> Real {
   assert 0.0 < α;
   assert 0.0 < β;
   cpp{{
-  //return boost::math::pdf(boost::math::inverse_gamma_distribution<>(α, β), x);
+  return boost::math::pdf(boost::math::inverse_gamma_distribution<>(α, β), x);
   }}
+}
+
+/**
+ * PDF of an inverse Wishart variate.
+ *
+ * - X: The variate.
+ * - Ψ: Scale.
+ * - ν: Degrees of freedom.
+ *
+ * Returns: the probability density.
+ */
+function pdf_inverse_wishart(X:Real[_,_], Ψ:Real[_,_], ν:Real) -> Real {
+  return exp(logpdf_inverse_wishart(X, Ψ, ν));
 }
 
 /**
@@ -411,7 +436,7 @@ function pdf_lomax(x:Real, λ:Real, α:Real) -> Real {
   assert 0.0 < α;
 
   cpp{{
-  //return boost::math::pdf(boost::math::pareto_distribution<>(λ, α), x + λ);
+  return boost::math::pdf(boost::math::pareto_distribution<>(λ, α), x + λ);
   }}
 }
 
@@ -529,7 +554,21 @@ function pdf_multivariate_gaussian(x:Real[_], μ:Real[_], Σ:Real[_,_]) ->
 }
 
 /**
- * PDF of a multivariate Gaussian distribution with diagonal covariance.
+ * PDF of a multivariate Gaussian distribution with independent elements.
+ *
+ * - x: The variate.
+ * - μ: Mean.
+ * - σ2: Variance.
+ *
+ * Return: the probability density.
+ */
+function pdf_multivariate_gaussian(x:Real[_], μ:Real[_], σ2:Real[_]) -> Real {
+  return exp(logpdf_multivariate_gaussian(x, μ, σ2));
+}
+
+/**
+ * PDF of a multivariate Gaussian distribution with independent elements of
+ * identical variance.
  *
  * - x: The variate.
  * - μ: Mean.
@@ -539,54 +578,6 @@ function pdf_multivariate_gaussian(x:Real[_], μ:Real[_], Σ:Real[_,_]) ->
  */
 function pdf_multivariate_gaussian(x:Real[_], μ:Real[_], σ2:Real) -> Real {
   return exp(logpdf_multivariate_gaussian(x, μ, σ2));
-}
-
-/**
- * PDF of a multivariate Student's $t$-distribution variate with location
- * and scale.
- *
- * - x: The variate.
- * - ν: Degrees of freedom.
- * - μ: Location.
- * - Λ: Precision.
- *
- * Return: the probability density.
- */
-function pdf_multivariate_student_t(x:Real[_], ν:Real, μ:Real[_],
-    Λ:Real[_,_]) -> Real {
-  return exp(logpdf_multivariate_student_t(x, ν, μ, Λ));
-}
-
-/**
- * PDF of a multivariate Student's $t$-distribution variate with location
- * and diagonal scale.
- *
- * - x: The variate.
- * - ν: Degrees of freedom.
- * - μ: Location.
- * - λ: Precision.
- *
- * Return: the probability density.
- */
-function pdf_multivariate_student_t(x:Real[_], ν:Real, μ:Real[_],
-    λ:Real) -> Real {
-  return exp(logpdf_multivariate_student_t(x, ν, μ, λ));
-}
-
-/**
- * PDF of a multivariate normal inverse-gamma variate.
- *
- * - x: The variate.
- * - μ: Mean.
- * - Λ: Precision.
- * - α: Shape of inverse-gamma on scale.
- * - β: Scale of inverse-gamma on scale.
- *
- * Return: the probability density.
- */
-function pdf_multivariate_normal_inverse_gamma(x:Real[_], μ:Real[_],
-    Λ:LLT, α:Real, β:Real) -> Real {
-  return pdf_multivariate_student_t(x, 2.0*α, μ, Λ*(α/β));
 }
 
 /**
@@ -600,9 +591,25 @@ function pdf_multivariate_normal_inverse_gamma(x:Real[_], μ:Real[_],
  *
  * Return: the probability density.
  */
-function pdf_multivariate_inverse_gamma_gaussian(x:Real[_], μ:Real[_],
+function pdf_inverse_gamma_multivariate_gaussian(x:Real[_], μ:Real[_],
     α:Real, β:Real) -> Real {
   return pdf_multivariate_student_t(x, 2.0*α, μ, β/α);
+}
+
+/**
+ * PDF of a multivariate normal inverse-gamma variate.
+ *
+ * - x: The variate.
+ * - ν: Precision times mean.
+ * - Λ: Precision.
+ * - α: Shape of inverse-gamma on scale.
+ * - β: Scale of inverse-gamma on scale.
+ *
+ * Return: the probability density.
+ */
+function pdf_multivariate_normal_inverse_gamma(x:Real[_], ν:Real[_],
+    Λ:LLT, α:Real, β:Real) -> Real {
+  return pdf_multivariate_student_t(x, 2.0*α, solve(Λ, ν), (β/α)*inv(Λ));
 }
 
 /**
@@ -610,16 +617,17 @@ function pdf_multivariate_inverse_gamma_gaussian(x:Real[_], μ:Real[_],
  * inverse-gamma prior.
  *
  * - x: The variate.
- * - μ: Mean.
+ * - ν: Precision times mean.
  * - Λ: Precision.
  * - α: Shape of the inverse-gamma.
- * - β: Scale of the inverse-gamma.
+ * - γ: Scale accumulator of the inverse-gamma.
  *
  * Return: the probability density.
  */
-function pdf_multivariate_normal_inverse_gamma_gaussian(x:Real[_], μ:Real[_],
-    Λ:LLT, α:Real, β:Real) -> Real {
-  return exp(logpdf_multivariate_normal_inverse_gamma_gaussian(x, μ, Λ, α, β));
+function pdf_multivariate_normal_inverse_gamma_multivariate_gaussian(x:Real[_], ν:Real[_],
+    Λ:LLT, α:Real, γ:Real) -> Real {
+  return exp(logpdf_multivariate_normal_inverse_gamma_multivariate_gaussian(
+      x, ν, Λ, α, γ));
 }
 
 /**
@@ -628,38 +636,206 @@ function pdf_multivariate_normal_inverse_gamma_gaussian(x:Real[_], μ:Real[_],
  *
  * - x: The variate.
  * - A: Scale.
- * - μ: Mean.
+ * - ν: Precision times mean.
  * - c: Offset.
  * - Λ: Precision.
  * - α: Shape of the inverse-gamma.
- * - β: Scale of the inverse-gamma.
+ * - γ: Scale accumulator of the inverse-gamma.
  *
  * Return: the probability density.
  */
-function pdf_multivariate_linear_normal_inverse_gamma_gaussian(x:Real[_],
-    A:Real[_,_], μ:Real[_], c:Real[_], Λ:LLT, α:Real, β:Real) -> Real {
-  return exp(logpdf_multivariate_linear_normal_inverse_gamma_gaussian(x, A,
-      μ, c, Λ, α, β));
+function pdf_linear_multivariate_normal_inverse_gamma_multivariate_gaussian(x:Real[_],
+    A:Real[_,_], ν:Real[_], c:Real[_], Λ:LLT, α:Real, γ:Real) -> Real {
+  return exp(logpdf_linear_multivariate_normal_inverse_gamma_multivariate_gaussian(
+      x, A, ν, c, Λ, α, γ));
 }
 
 /**
- * PDF of a Gaussian variate with a multivariate normal
- * inverse-gamma prior with dot transformation.
+ * PDF of a matrix Gaussian distribution.
+ *
+ * - X: The variate.
+ * - M: Mean.
+ * - U: Among-row covariance.
+ * - V: Among-column covariance.
+ *
+ * Returns: the probability density.
+ */
+function pdf_matrix_gaussian(X:Real[_,_], M:Real[_,_], U:Real[_,_],
+    V:Real[_,_]) -> Real {
+  return exp(logpdf_matrix_gaussian(X, M, U, V));
+}
+
+/**
+ * PDF of a matrix normal-inverse-gamma variate.
+ *
+ * - X: The variate.
+ * - N: Precision times mean matrix.
+ * - Λ: Precision.
+ * - α: Variance shape.
+ * - γ: Variance scale accumulators.
+ *
+ * Returns: the probability density.
+ */
+function pdf_matrix_normal_inverse_gamma(X:Real[_,_], N:Real[_,_], Λ:LLT,
+    α:Real, γ:Real[_]) -> Real {
+  return exp(logpdf_matrix_normal_inverse_gamma(X, N, Λ, α, γ));
+}
+
+/**
+ * PDF of a Gaussian variate with matrix normal inverse-gamma prior.
+ *
+ * - X: The variate.
+ * - N: Precision times mean matrix.
+ * - Λ: Precision.
+ * - α: Variance shape.
+ * - γ: Variance scale accumulators.
+ *
+ * Returns: the probability density.
+ */
+function pdf_matrix_normal_inverse_gamma_matrix_gaussian(
+    X:Real[_,_], N:Real[_,_], Λ:LLT, α:Real, γ:Real[_]) -> Real {
+  return exp(logpdf_matrix_normal_inverse_gamma_matrix_gaussian(X,
+      N, Λ, α, γ));
+}
+
+/**
+ * PDF of a Gaussian variate with matrix normal inverse-gamma prior.
+ *
+ * - X: The variate.
+ * - A: Scale.
+ * - N: Precision times mean matrix.
+ * - C: Offset.
+ * - Λ: Precision.
+ * - α: Variance shape.
+ * - γ: Variance scale accumulators.
+ *
+ * Returns: the probability density.
+ */
+function pdf_linear_matrix_normal_inverse_gamma_matrix_gaussian(
+    X:Real[_,_], A:Real[_,_], N:Real[_,_], C:Real[_,_], Λ:LLT, α:Real,
+    γ:Real[_]) -> Real {
+  return exp(logpdf_linear_matrix_normal_inverse_gamma_matrix_gaussian(X,
+      A, N, C, Λ, α, γ));
+}
+
+/**
+ * PDF of a matrix normal-inverse-Wishart variate.
+ *
+ * - X: The variate.
+ * - N: Precision times mean matrix.
+ * - Λ: Precision.
+ * - V: Prior variance shape.
+ * - k: Prior degrees of freedom.
+ *
+ * Returns: the probability density.
+ */
+function pdf_matrix_normal_inverse_wishart(X:Real[_,_], N:Real[_,_],
+    Λ:LLT, V:Real[_,_], k:Real) -> Real {
+  return exp(logpdf_matrix_normal_inverse_wishart(X, N, Λ, V, k));
+}
+
+/**
+ * PDF of a Gaussian variate with matrix-normal-inverse-Wishart prior.
+ *
+ * - X: The variate.
+ * - N: Prior precision times mean matrix.
+ * - Λ: Prior precision.
+ * - V: Prior variance shape.
+ * - k: Prior degrees of freedom.
+ *
+ * Returns: the probability density.
+ */
+function pdf_matrix_normal_inverse_wishart_matrix_gaussian(X:Real[_,_],
+    N:Real[_,_], Λ:LLT, V:Real[_,_], k:Real) -> Real {
+  return exp(logpdf_matrix_normal_inverse_wishart_matrix_gaussian(X, N, Λ, V,
+      k));
+}
+
+/**
+ * PDF of a Gaussian variate with linear transformation of a
+ * matrix-normal-inverse-Wishart prior.
+ *
+ * - X: The variate.
+ * - A: Scale.
+ * - N: Prior precision times mean matrix.
+ * - C: Offset.
+ * - Λ: Prior precision.
+ * - V: Prior variance shape.
+ * - k: Prior degrees of freedom.
+ *
+ * Returns: the probability density.
+ */
+function pdf_linear_matrix_normal_inverse_wishart_matrix_gaussian(
+    X:Real[_,_], A:Real[_,_], N:Real[_,_], C:Real[_,_], Λ:LLT, V:Real[_,_],
+    k:Real) -> Real {
+  return exp(logpdf_linear_matrix_normal_inverse_wishart_matrix_gaussian(X,
+      A, N, C, Λ, V, k));
+}
+
+/**
+ * PDF of a multivariate Student's $t$-distribution variate with location
+ * and scale.
  *
  * - x: The variate.
- * - a: Scale.
+ * - k: Degrees of freedom.
  * - μ: Mean.
- * - c: Offset.
- * - Λ: Precision.
- * - α: Shape of the inverse-gamma.
- * - β: Scale of the inverse-gamma.
+ * - Σ: Covariance.
  *
  * Return: the probability density.
  */
-function pdf_multivariate_dot_normal_inverse_gamma_gaussian(x:Real,
-    a:Real[_], μ:Real[_], c:Real, Λ:LLT, α:Real, β:Real) -> Real {
-  return exp(logpdf_multivariate_dot_normal_inverse_gamma_gaussian(x, a, μ,
-      c, Λ, α, β));
+function pdf_multivariate_student_t(x:Real[_], k:Real, μ:Real[_], Σ:Real[_,_]) ->
+    Real {
+  return exp(logpdf_multivariate_student_t(x, k, μ, Σ));
+}
+
+/**
+ * PDF of a multivariate Student's $t$-distribution variate with location
+ * and diagonal scale.
+ *
+ * - x: The variate.
+ * - k: Degrees of freedom.
+ * - μ: Mean.
+ * - σ2: Variance.
+ *
+ * Return: the probability density.
+ */
+function pdf_multivariate_student_t(x:Real[_], k:Real, μ:Real[_],
+    σ2:Real) -> Real {
+  return exp(logpdf_multivariate_student_t(x, k, μ, σ2));
+}
+
+/**
+ * PDF of a matrix Student's $t$-distribution variate with location
+ * and scale.
+ *
+ * - X: The variate.
+ * - k: Degrees of freedom.
+ * - M: Mean.
+ * - U: Among-row covariance.
+ * - V: Among-column covariance.
+ *
+ * Returns: the probability density.
+ */
+function pdf_matrix_student_t(X:Real[_,_], k:Real, M:Real[_,_], U:Real[_,_],
+    V:Real[_,_]) -> Real {
+  return exp(logpdf_matrix_student_t(X, k, M, U, V));
+}
+
+/**
+ * PDF of a matrix Student's $t$-distribution variate with location
+ * and diagonal scale.
+ *
+ * - X: The variate.
+ * - k: Degrees of freedom.
+ * - M: Mean.
+ * - U: Among-row covariance.
+ * - v: Independent within-column covariance.
+ *
+ * Returns: the probability density.
+ */
+function pdf_matrix_student_t(X:Real[_,_], k:Real, M:Real[_,_], U:Real[_,_],
+    v:Real[_]) -> Real {
+  return exp(logpdf_matrix_student_t(X, k, M, U, v));
 }
 
 /**
@@ -671,7 +847,7 @@ function pdf_multivariate_dot_normal_inverse_gamma_gaussian(x:Real,
  *
  * Return: the probability density.
  */
-function pdf_multivariate_uniform(x:Real[_], l:Real[_], u:Real[_]) -> Real {
+function pdf_independent_uniform(x:Real[_], l:Real[_], u:Real[_]) -> Real {
   assert length(x) > 0;
   assert length(l) == length(x);
   assert length(u) == length(x);
@@ -693,7 +869,7 @@ function pdf_multivariate_uniform(x:Real[_], l:Real[_], u:Real[_]) -> Real {
  *
  * Return: the probability density.
  */
-function pdf_multivariate_uniform_int(x:Integer[_], l:Integer[_],
+function pdf_independent_uniform_int(x:Integer[_], l:Integer[_],
     u:Integer[_]) -> Real {
   assert length(x) > 0;
   assert length(l) == length(x);

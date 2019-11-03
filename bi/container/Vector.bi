@@ -154,7 +154,7 @@ final class Vector<Type> {
    */
   function shrink(n:Integer) {
     cpp{{
-    self->values.shrink(libbirch::make_frame(n));
+    self->values.shrink(libbirch::make_shape(n));
     }}
     nelements <- n;
   }
@@ -169,7 +169,7 @@ final class Vector<Type> {
    */
   function enlarge(n:Integer, x:Type) {
     cpp{{
-    self->values.enlarge(libbirch::make_frame(n), x);
+    self->values.enlarge(libbirch::make_shape(n), x);
     }}
     nelements <- n;
   }
@@ -192,12 +192,12 @@ final class Vector<Type> {
   function read(buffer:Buffer) {
     auto f <- buffer.walk();
     while f? {
-      /* tricky, but works for both basic and class types */
-      x:Type;
+      /* tricky, but works for both value and class types */
+      auto x <- make<Type>();
       auto y <- f!.get(x);
       if y? {
-        x <- Type?(y)!;  // cast needed for y:Object?
-        pushBack(x);
+        x <- Type?(y);  // cast needed for y:Object?
+        pushBack(x!);
       }
     }
   }
