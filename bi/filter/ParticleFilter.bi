@@ -207,7 +207,7 @@ class ParticleFilter {
     auto w' <- w;
     auto W <- lnormalize;  // cumulative log normalizing constant estimate
 	
-	if t < nparticles{
+	if (t < nsteps!){
 		yield (x', w', W, 0);
 		
 	}
