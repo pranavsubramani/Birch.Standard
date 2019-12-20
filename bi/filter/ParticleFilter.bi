@@ -202,12 +202,16 @@ class ParticleFilter {
   fiber forecast(t:Integer, x:Model[_], w:Real[_], lnormalize:Real) -> (Model[_],
       Real[_], Real, Real) {
     assert length(x) == nparticles;
-
+	
     auto x' <- x;
     auto w' <- w;
     auto W <- lnormalize;  // cumulative log normalizing constant estimate
-
-    /* resample */
+	
+	if t < nparticles{
+		yield (x', w', W, 0);
+		
+	}
+	else{
     ess:Real;
     S:Real;
     
@@ -233,7 +237,7 @@ class ParticleFilter {
       	W <- W + S - log(nparticles);
       }
       yield (x', w', W, S);
-    }
+    }}
   }
 
   function read(buffer:Buffer) {
