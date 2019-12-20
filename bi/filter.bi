@@ -109,6 +109,8 @@ program filter(
     sample:Model[_];
     lweight:Real[_];
     lnormalize:Real;
+    levidence:Real;
+    S:Real;
     ess:Real;
     propagations:Integer;
     (sample, lweight, lnormalize, ess, propagations) <- f!;
@@ -125,15 +127,18 @@ program filter(
     
     /* forecast */
     auto forecast <- buffer.setArray("forecast");
-    auto g <- filter!.forecast(t, sample, lweight);
+    auto g <- filter!.forecast(t, sample, lweight, lnormalize);
     while g? {
-      (sample, lweight) <- g!;
+      (sample, lweight, levidence, S) <- g!;
       
       /* write forecast to buffer */
       if outputWriter? {
         auto buffer <- forecast.push();
         buffer.set("sample", sample);
         buffer.set("lweight", lweight);
+        buffer.set("levidence", levidence);
+        buffer.set("S", S);
+        
       }
     }
 
