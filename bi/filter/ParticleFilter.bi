@@ -123,8 +123,8 @@ class ParticleFilter {
     replay:TraceHandler <- global.replay;  // to replay reference particle
     play:Handler <- global.play;  // for other particles
     if delayed {
-      play <- global.playDelay;
       replay <- global.replayDelay;
+      play <- global.playDelay;
     }
 
     /* initialize and weight */
@@ -199,17 +199,22 @@ class ParticleFilter {
    *   - particle states,
    *   - particle log weights.
    */
-  fiber forecast(t:Integer, x:Model[_], w:Real[_]) -> (Model[_],
-      Real[_]) {
+  fiber forecast(t:Integer, x:Model[_], w:Real[_], lnormalize:Real) -> (Model[_],
+      Real[_], Real, Real) {
     assert length(x) == nparticles;
-
+	
     auto x' <- x;
     auto w' <- w;
-
-    /* resample */
+    auto W <- lnormalize;  // cumulative log normalizing constant estimate
+	
+	if (t < nsteps!){
+		yield (x', w', W, 0);
+		
+	}
+	else{
     ess:Real;
     S:Real;
-    (ess, S) <- resample_reduce(w);
+    
     if ess <= trigger*nparticles {
       auto a <- resample_systematic(w);
       dynamic parallel for n in 1..nparticles {
@@ -227,8 +232,12 @@ class ParticleFilter {
       parallel for n in 1..nparticles {
         w'[n] <- w'[n] + play.handle(x'[n].forecast(t + s));
       }
-      yield (x', w');
-    }
+      if (s > 1) {
+      	(ess, S) <- resample_reduce(w');
+      	W <- W + S - log(nparticles);
+      }
+      yield (x', w', W, S);
+    }}
   }
 
   function read(buffer:Buffer) {
