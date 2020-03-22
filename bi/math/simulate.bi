@@ -183,7 +183,7 @@ function simulate_multinomial(n:Integer, ρ:Real[_], Z:Real) -> Integer[_] {
   i:Integer <- n;
   u:Real;
   x:Integer[_] <- vector(0, D);
-    
+
   while i > 0 {
     u <- simulate_uniform(0.0, 1.0);
     lnMax <- lnMax + log(u)/i;
@@ -219,7 +219,7 @@ function simulate_dirichlet(α:Real[_]) -> Real[_] {
   z <- 1.0/z;
   for i in 1..D {
     x[i] <- z*x[i];
-  }  
+  }
   return x;
 }
 
@@ -364,10 +364,10 @@ function simulate_student_t(ν:Real, μ:Real, σ2:Real) -> Real {
 function simulate_beta(α:Real, β:Real) -> Real {
   assert 0.0 < α;
   assert 0.0 < β;
-  
+
   u:Real <- simulate_gamma(α, 1.0);
   v:Real <- simulate_gamma(β, 1.0);
-  
+
   return u/(u + v);
 }
 
@@ -408,7 +408,7 @@ function simulate_wishart(Ψ:Real[_,_], k:Real) -> Real[_,_] {
   assert k > rows(Ψ) - 1;
   auto p <- rows(Ψ);
   A:Real[p,p];
-  
+
   for i in 1..p {
     for j in 1..p {
       if j == i {
@@ -469,7 +469,7 @@ function simulate_normal_inverse_gamma(μ:Real, a2:Real, α:Real,
 function simulate_beta_bernoulli(α:Real, β:Real) -> Boolean {
   assert 0.0 < α;
   assert 0.0 < β;
-  
+
   return simulate_bernoulli(simulate_beta(α, β));
 }
 
@@ -484,7 +484,7 @@ function simulate_beta_binomial(n:Integer, α:Real, β:Real) -> Integer {
   assert 0 <= n;
   assert 0.0 < α;
   assert 0.0 < β;
-  
+
   return simulate_binomial(n, simulate_beta(α, β));
 }
 
@@ -514,7 +514,7 @@ function simulate_gamma_poisson(k:Real, θ:Real) -> Integer {
   assert 0.0 < k;
   assert 0.0 < θ;
   assert k == floor(k);
-  
+
   return simulate_negative_binomial(Integer(k), 1.0/(θ + 1.0));
 }
 
@@ -725,7 +725,7 @@ function simulate_matrix_gaussian(M:Real[_,_], U:Real[_,_], V:Real[_,_]) ->
   assert rows(M) == columns(U);
   assert columns(M) == rows(V);
   assert columns(M) == columns(V);
-  
+
   auto N <- rows(M);
   auto P <- columns(M);
   Z:Real[N,P];
@@ -749,7 +749,7 @@ function simulate_matrix_gaussian(M:Real[_,_], U:Real[_,_], σ2:Real[_]) ->
   assert rows(M) == rows(U);
   assert rows(M) == columns(U);
   assert columns(M) == length(σ2);
-  
+
   auto N <- rows(M);
   auto P <- columns(M);
   Z:Real[N,P];
@@ -770,7 +770,7 @@ function simulate_matrix_gaussian(M:Real[_,_], U:Real[_,_], σ2:Real[_]) ->
 function simulate_matrix_gaussian(M:Real[_,_], V:Real[_,_]) -> Real[_,_] {
   assert columns(M) == rows(V);
   assert columns(M) == columns(V);
-  
+
   auto N <- rows(M);
   auto P <- columns(M);
   Z:Real[N,P];
@@ -790,7 +790,7 @@ function simulate_matrix_gaussian(M:Real[_,_], V:Real[_,_]) -> Real[_,_] {
  */
 function simulate_matrix_gaussian(M:Real[_,_], σ2:Real[_]) -> Real[_,_] {
   assert columns(M) == length(σ2);
-  
+
   auto N <- rows(M);
   auto P <- columns(M);
   X:Real[N,P];
@@ -955,7 +955,7 @@ function simulate_matrix_student_t(k:Real, M:Real[_,_], U:Real[_,_],
   assert rows(M) == columns(U);
   assert columns(M) == rows(V);
   assert columns(M) == columns(V);
-  
+
   auto N <- rows(M);
   auto P <- columns(M);
   Z:Real[N,P];
@@ -980,7 +980,7 @@ function simulate_matrix_student_t(k:Real, M:Real[_,_], U:Real[_,_],
   assert rows(M) == rows(U);
   assert rows(M) == columns(U);
   assert columns(M) == length(v);
-  
+
   auto N <- rows(M);
   auto P <- columns(M);
   Z:Real[N,P];
@@ -1023,3 +1023,22 @@ function simulate_independent_uniform_int(l:Integer[_], u:Integer[_]) -> Integer
   }
   return z;
 }
+
+
+/**
+ * Simulate a log normal distribution over real numbers
+ *
+ * - μ: mean
+ * - σ: standard deviation
+ */
+
+ function simulate_lognormal(μ:Real, σ:Real) -> Real[_] {
+  assert 0.0 < σ;
+  if (σ == 0) {
+    return μ;
+  } else {
+    cpp{{
+    return std::lognormal_distribution<bi::type::Real>(μ, std::sqrt(σ))(rng);
+    }}
+  }
+ }
