@@ -20,16 +20,14 @@ final class DelayUniform(future:Real?, futureUpdate:Boolean, μ:Real, σ2:Real)
 
      function logpdf(x:Real) -> Real {
         return exp(logpdf_gaussian(x, μ, 1.0/λ);
-        // TODO: check if this is correct
      }
 
      function cdf(x:Real) -> Real? {
         return cdf_gaussian(log(x), μ, 1.0/λ);
      }
 
-     // TODO: fix
      function quantile(p:Real) -> Real? {
-        return quantile_gaussian(p, μ, σ2);
+        return exp(quantile_gaussian(p, μ, 1.0/λ));
      }
 
      function write(buffer:Buffer) {
