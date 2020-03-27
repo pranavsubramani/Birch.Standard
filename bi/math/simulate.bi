@@ -1032,7 +1032,7 @@ function simulate_independent_uniform_int(l:Integer[_], u:Integer[_]) -> Integer
  * - σ: standard deviation
  */
 
- function simulate_lognormal(μ:Real, σ:Real) -> Real[_] {
+ function simulate_lognormal(μ:Real, σ:Real) -> Real {
   assert 0.0 < σ;
   if (σ == 0) {
     return μ;
