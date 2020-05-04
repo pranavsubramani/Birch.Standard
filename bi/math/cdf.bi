@@ -10,7 +10,7 @@
 function cdf_binomial(x:Integer, n:Integer, ρ:Real) -> Real {
   assert 0 <= n;
   assert 0.0 <= ρ && ρ <= 1.0;
-  
+  // need the incomplete beta function to implement this
   if x < 0 {
     return 0.0;
   } else if x > n {
@@ -19,7 +19,7 @@ function cdf_binomial(x:Integer, n:Integer, ρ:Real) -> Real {
     cpp{{
     return boost::math::cdf(boost::math::binomial_distribution<>(n, ρ), x);
     }}
-  } 
+  }
 }
 
 /**
@@ -34,7 +34,7 @@ function cdf_binomial(x:Integer, n:Integer, ρ:Real) -> Real {
 function cdf_negative_binomial(x:Integer, k:Integer, ρ:Real) -> Real {
   assert 0 < k;
   assert 0.0 <= ρ && ρ <= 1.0;
-  
+
   if x < 0 {
     return 0.0;
   } else {
@@ -54,7 +54,7 @@ function cdf_negative_binomial(x:Integer, k:Integer, ρ:Real) -> Real {
  */
 function cdf_poisson(x:Integer, λ:Real) -> Real {
   assert 0.0 <= λ;
-  
+  // need the incomplete gamma function to implement this
   if x < 0 {
     return 0.0;
   } else {
@@ -110,7 +110,7 @@ function cdf_categorical(x:Integer, ρ:Real[_]) -> Real {
  */
 function cdf_uniform(x:Real, l:Real, u:Real) -> Real {
   assert l <= u;
-  
+
   if x <= l {
     return 0.0;
   } else if x > u {
@@ -148,7 +148,7 @@ function cdf_inverse_gamma_gamma(x:Real, k:Real, α:Real, β:Real) -> Real {
  */
 function cdf_exponential(x:Real, λ:Real) -> Real {
   assert 0.0 < λ;
-  
+
   if x <= 0.0 {
     return 0.0;
   } else {
@@ -167,6 +167,7 @@ function cdf_exponential(x:Real, λ:Real) -> Real {
  *
  * Return: the cumulative probability.
  */
+ // don't need boost, just exp function is required
 function cdf_weibull(x:Real, k:Real, λ:Real) -> Real {
   assert 0.0 < k;
   assert 0.0 < λ;
@@ -186,9 +187,7 @@ function cdf_weibull(x:Real, k:Real, λ:Real) -> Real {
  */
 function cdf_gaussian(x:Real, μ:Real, σ2:Real) -> Real {
   assert 0.0 < σ2;
-  cpp{{
-  return boost::math::cdf(boost::math::normal_distribution<>(μ, ::sqrt(σ2)), x);
-  }}
+  return 0.5*(1.0 + erf((x - μ)/sqrt(2.0 * σ2)));
 }
 
 /**
@@ -233,7 +232,7 @@ function cdf_student_t(x:Real, ν:Real, μ:Real, σ2:Real) -> Real {
 function cdf_beta(x:Real, α:Real, β:Real) -> Real {
   assert 0.0 < α;
   assert 0.0 < β;
-  
+
   if x < 0.0 {
     return 0.0;
   } else if x > 1.0 {
@@ -272,7 +271,7 @@ function cdf_chi_squared(x:Real, ν:Real) -> Real {
 function cdf_gamma(x:Real, k:Real, θ:Real) -> Real {
   assert 0.0 < k;
   assert 0.0 < θ;
-  
+
   if x <= 0.0 {
     return 0.0;
   } else {
@@ -294,7 +293,7 @@ function cdf_gamma(x:Real, k:Real, θ:Real) -> Real {
 function cdf_inverse_gamma(x:Real, α:Real, β:Real) -> Real {
   assert 0.0 < α;
   assert 0.0 < β;
-  
+
   if x <= 0.0 {
     return 0.0;
   } else {
