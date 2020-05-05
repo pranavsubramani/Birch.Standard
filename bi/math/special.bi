@@ -104,9 +104,35 @@ function beta(x:Real32, y:Real32) -> Real32 {
  * The incomplete beta function.
  */
 function ibeta(a:Real64, b:Real64, x:Real64) -> Real64 {
-  cpp {{
-    return boost::math::ibeta(a, b, x);
-  }}
+  if x < 0.0 || x > 1.0 {
+    return inf;
+  }
+  // whenever x < (a + 1) / (a + b + 2) -- CF converges
+  if x > (a + 1.0)/(a + b + 2.0) {
+    return 1.0 - ibeta(b, a, 1.0 - x);
+  }
+
+  auto lbeta_ab <- lgamma(a) + lgamma(b) - lgamma(a + b);
+  auto front <- exp(log(x)*a + log(1.0 - x)*b - lbeta_ab) / a;
+
+  // setup for Lentz's algorithm
+  auto f <- 1.0;
+  auto c <- 1.0;
+  auto d <- 0.0;
+
+  for auto i in 0..200 {
+    auto m = i/2;
+
+    auto numerator <- 1.0;
+
+    if i == 0 {
+      numerator <- 1.0;
+    } else if mod(i, 2.0) {
+
+    }
+
+  }
+
 }
 
 /**
@@ -139,7 +165,7 @@ function choose(x:Real64, y:Real64) -> Real64 {
   assert 0.0 <= x;
   assert 0.0 <= y;
   assert x >= y;
-  
+
   if (y == 0.0) {
     return 1.0;
   } else {
@@ -155,7 +181,7 @@ function choose(x:Real32, y:Real32) -> Real32 {
   assert Real32(0.0) <= x;
   assert Real32(0.0) <= y;
   assert x >= y;
-  
+
   if (y == Real32(0.0)) {
     return Real32(1.0);
   } else {
@@ -171,7 +197,7 @@ function lchoose(x:Real64, y:Real64) -> Real64 {
   assert 0.0 <= x;
   assert 0.0 <= y;
   assert x >= y;
-  
+
   if (y == 0.0) {
     return 0.0;
   } else {
@@ -187,7 +213,7 @@ function lchoose(x:Real32, y:Real32) -> Real32 {
   assert Real32(0.0) <= x;
   assert Real32(0.0) <= y;
   assert x >= y;
-  
+
   if (y == Real32(0.0)) {
     return log(Real32(1.0));
   } else {
