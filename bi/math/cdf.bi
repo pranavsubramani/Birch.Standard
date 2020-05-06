@@ -148,7 +148,7 @@ function cdf_inverse_gamma_gamma(x:Real, k:Real, α:Real, β:Real) -> Real {
  */
 function cdf_exponential(x:Real, λ:Real) -> Real {
   assert 0.0 < λ;
-
+  // can be implemented without boost (all deps in Birch already)
   if x <= 0.0 {
     return 0.0;
   } else {
@@ -200,6 +200,7 @@ function cdf_gaussian(x:Real, μ:Real, σ2:Real) -> Real {
  */
 function cdf_student_t(x:Real, ν:Real) -> Real {
   assert 0.0 < ν;
+  // requires incomplete beta function
   cpp{{
   return boost::math::cdf(boost::math::students_t_distribution<>(ν), x);
   }}
@@ -232,7 +233,7 @@ function cdf_student_t(x:Real, ν:Real, μ:Real, σ2:Real) -> Real {
 function cdf_beta(x:Real, α:Real, β:Real) -> Real {
   assert 0.0 < α;
   assert 0.0 < β;
-
+  // requires incomplete beta function
   if x < 0.0 {
     return 0.0;
   } else if x > 1.0 {
@@ -254,6 +255,7 @@ function cdf_beta(x:Real, α:Real, β:Real) -> Real {
  */
 function cdf_chi_squared(x:Real, ν:Real) -> Real {
   assert 0.0 < ν;
+  // requires lower incomplete gamma
   cpp{{
   return boost::math::cdf(boost::math::chi_squared_distribution<>(ν), x);
   }}
@@ -271,7 +273,7 @@ function cdf_chi_squared(x:Real, ν:Real) -> Real {
 function cdf_gamma(x:Real, k:Real, θ:Real) -> Real {
   assert 0.0 < k;
   assert 0.0 < θ;
-
+  // requires lower incomplete gamma for this
   if x <= 0.0 {
     return 0.0;
   } else {
@@ -293,7 +295,7 @@ function cdf_gamma(x:Real, k:Real, θ:Real) -> Real {
 function cdf_inverse_gamma(x:Real, α:Real, β:Real) -> Real {
   assert 0.0 < α;
   assert 0.0 < β;
-
+  // need incomplete gamma function for this
   if x <= 0.0 {
     return 0.0;
   } else {
@@ -364,6 +366,7 @@ function cdf_gamma_poisson(x:Integer, k:Real, θ:Real) -> Real {
  * Return: the cumulative probability.
  */
 function cdf_lomax(x:Real, λ:Real, α:Real) -> Real {
+  // has closed for cdf
   assert 0.0 < λ;
   assert 0.0 < α;
 
